@@ -46,7 +46,11 @@ export const ChatList: React.FC<ChatListProps> = ({
         const snap = await getDocs(q);
         if (!snap.empty) {
           const foundUser = { id: snap.docs[0].id, ...snap.docs[0].data() } as User;
-          if (foundUser.talkoNumber !== currentUser.talkoNumber) {
+          if (
+            foundUser.talkoNumber !== currentUser.talkoNumber &&
+            !foundUser.isBusinessAccount &&
+            !foundUser.isAlphanumericSender
+          ) {
             setGlobalSearchResult(foundUser);
           } else {
             setGlobalSearchResult(null);
@@ -105,9 +109,7 @@ export const ChatList: React.FC<ChatListProps> = ({
   // Categorization Functions
   const isProtectedAccount = (u: User) => 
     u.isSystemAccount || 
-    u.talkoNumber === 'TALKO' || 
-    u.email?.toLowerCase() === 'lowai.official@gmail.com' || 
-    u.email?.toLowerCase() === 'devy.build.backup@gmail.com';
+    u.talkoNumber === 'TALKO';
 
   const isBlocked = (c: Conversation) => {
     const otherUser = c.participantUsers.find(u => u.talkoNumber !== currentUser.talkoNumber) || c.participantUsers[0];
@@ -296,6 +298,8 @@ export const ChatList: React.FC<ChatListProps> = ({
                   avatarUrl={otherUser.avatarUrl}
                   name={displayName}
                   isAlphanumeric={otherUser.isAlphanumericSender || otherUser.isBusinessAccount}
+                  isSpam={activeFolder === 'spam' || isSpam(conv)}
+                  isBlocked={activeFolder === 'blocked' || isBlocked(conv)}
                 />
                 {isUserOnline(otherUser) && !isSystem && (
                   <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[#181B22]"></div>

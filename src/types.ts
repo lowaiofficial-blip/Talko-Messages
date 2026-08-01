@@ -41,10 +41,21 @@ export const SPAM_KEYWORDS = [
   'kazandınız'
 ];
 
+export const normalizeText = (text: string): string => {
+  if (!text) return '';
+  return text.toLowerCase().replace(/[\s\._\-\+\*\/\:\;\,\\\|\@\#\$\%\^\&\(\)\[\]\{\}\?\!\<\>]/g, '');
+};
+
 export const checkIsSpam = (text?: string): boolean => {
   if (!text) return false;
   const lower = text.toLowerCase();
-  return SPAM_KEYWORDS.some(kw => lower.includes(kw.toLowerCase()));
+  const normalized = normalizeText(text);
+
+  if (SPAM_KEYWORDS.some(kw => lower.includes(kw) || normalized.includes(normalizeText(kw)))) {
+    return true;
+  }
+
+  return false;
 };
 
 export interface FilterResult {
@@ -55,31 +66,41 @@ export interface FilterResult {
 export const checkBusinessFilter = (text?: string): FilterResult => {
   if (!text) return { isBlocked: false, reasons: [] };
   const lower = text.toLowerCase();
+  const normalized = normalizeText(text);
   const reasons: string[] = [];
 
-  // 1. E-posta adresleri
+  // 1. E-posta adresleri (gmail, proton, outlook, hotmail, yahoo, icloud)
   const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/i;
-  const emailDomains = ['@gmail.com', '@outlook.com', '@hotmail.com', '@yahoo.com', '@icloud.com', '@proton.me', '@protonmail.com'];
-  if (emailRegex.test(text) || emailDomains.some(domain => lower.includes(domain))) {
-    reasons.push('E-posta adresi içeriyor.');
+  const emailKeywords = ['gmail', 'proton', 'outlook', 'hotmail', 'yahoo', 'icloud', 'protonmail'];
+  if (
+    emailRegex.test(text) || 
+    emailKeywords.some(kw => normalized.includes(kw))
+  ) {
+    reasons.push('E-posta adresi içeriyor (Gmail, Proton, Outlook vb.).');
   }
 
-  // 2. Mesajlaşma uygulamaları
+  // 2. Mesajlaşma uygulamaları (whatsapp, telegram, discord, signal)
   const messagingApps = ['whatsapp', 'telegram', 'discord', 'signal'];
-  if (messagingApps.some(app => lower.includes(app))) {
-    reasons.push('Mesajlaşma uygulaması içeriyor.');
+  if (messagingApps.some(app => normalized.includes(app))) {
+    reasons.push('Mesajlaşma uygulaması yönlendirmesi içeriyor (WhatsApp, Telegram vb.).');
   }
 
-  // 3. Sosyal medya
-  const socialPlatforms = ['instagram', 'tiktok', 'facebook', 'x.com', 'twitter'];
-  if (socialPlatforms.some(platform => lower.includes(platform))) {
-    reasons.push('Sosyal medya adresi/platformu içeriyor.');
+  // 3. Sosyal medya (instagram, tiktok, facebook, xcom, twitter)
+  const socialPlatforms = ['instagram', 'tiktok', 'facebook', 'xcom', 'twitter'];
+  if (socialPlatforms.some(platform => normalized.includes(platform))) {
+    reasons.push('Sosyal medya adresi/platformu içeriyor (Instagram, TikTok vb.).');
   }
 
-  // 4. Web siteleri
+  // 4. Web siteleri (http, https, www, discord.gg, vb.)
   const urlRegex = /\b(https?:\/\/|www\.)[^\s]+/i;
-  if (urlRegex.test(text) || lower.includes('http://') || lower.includes('https://') || lower.includes('www.')) {
-    reasons.push('Dış bağlantı içeriyor.');
+  if (
+    urlRegex.test(text) || 
+    normalized.includes('http') || 
+    normalized.includes('https') || 
+    normalized.includes('www') ||
+    normalized.includes('discordgg')
+  ) {
+    reasons.push('Dış bağlantı / Web sitesi adresi içeriyor.');
   }
 
   // 5. Telefon numaraları (+90, 05xx, 850, 212, 216 vb.)
@@ -92,7 +113,9 @@ export const checkBusinessFilter = (text?: string): FilterResult => {
     /\b(0850|0212|0216)\b/i,
     /\b\+?90\s?\d{3}\s?\d{3}\s?\d{2}\s?\d{2}\b/i
   ];
-  if (phonePatterns.some(pattern => pattern.test(text))) {
+  const normalizedPhoneRegex = /(05\d{9}|905\d{9}|0850\d{7}|850\d{7}|0212\d{7}|0216\d{7})/;
+
+  if (phonePatterns.some(pattern => pattern.test(text)) || normalizedPhoneRegex.test(normalized)) {
     reasons.push('Telefon numarası içeriyor.');
   }
 

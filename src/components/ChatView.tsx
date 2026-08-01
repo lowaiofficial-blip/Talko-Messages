@@ -25,9 +25,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
 
   const isProtectedAccount = 
     otherUser.isSystemAccount || 
-    otherUser.talkoNumber === 'TALKO' || 
-    otherUser.email?.toLowerCase() === 'lowai.official@gmail.com' || 
-    otherUser.email?.toLowerCase() === 'devy.build.backup@gmail.com';
+    otherUser.talkoNumber === 'TALKO';
 
   // Check if sender is blocked or conversation is in spam
   const isBlocked = !isProtectedAccount && (
@@ -225,6 +223,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
               avatarUrl={otherUser.avatarUrl}
               name={otherDisplayName}
               isAlphanumeric={otherUser.isAlphanumericSender || otherUser.isBusinessAccount}
+              isSpam={isSpam}
+              isBlocked={isBlocked}
             />
             <div>
               <h2 className={`text-sm font-bold text-white group-hover:text-[#2563EB] transition-colors ${!otherUser.isAlphanumericSender && !otherUser.isBusinessAccount && !otherUser.isSystemAccount ? 'font-mono' : ''}`}>

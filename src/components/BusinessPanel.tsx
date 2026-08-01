@@ -169,99 +169,13 @@ export const BusinessPanel: React.FC<BusinessPanelProps> = ({ currentUser, onClo
 
     // 🛡️ 1. GÖNDERİM ÖNCESİ OTOMATİK FİLTRE TARAMASI
     const filterResult = checkBusinessFilter(trimmedContent);
+    const isSpamContent = filterResult.isBlocked || checkIsSpam(trimmedContent);
 
-    if (filterResult.isBlocked) {
-      // Mesaj engellendi! Modal göster.
-      setBlockedWarningModalData({
-        reasons: filterResult.reasons,
-        content: trimmedContent,
-        recipientCount: selectedUserIds.size
-      });
-
-      // TALKO Otomatik Sistem Bildirimi oluştur
-      try {
-        const talkoConvId = `TALKO_${currentUser.talkoNumber}`;
-        const talkoConvRef = doc(db, 'conversations', talkoConvId);
-        const talkoMsgRef = doc(collection(db, 'conversations', talkoConvId, 'messages'));
-
-        const talkoSystemUser: User = {
-          id: 'talko_system',
-          talkoNumber: 'TALKO',
-          username: 'TALKO',
-          avatarColor: 'blue',
-          isOnline: true,
-          lastSeen: nowIso,
-          isBanned: false,
-          isSystemAccount: true
-        };
-
-        const talkoMsg = {
-          id: talkoMsgRef.id,
-          conversationId: talkoConvId,
-          senderId: 'talko_system',
-          senderNumber: 'TALKO',
-          senderName: 'TALKO',
-          senderAvatarColor: 'blue' as AvatarColor,
-          content: 'TALKO GÜVENLİK BİLDİRİMİ: Kurumsal gönderiminiz güvenlik politikaları nedeniyle engellendi. Lütfen E-posta, Telefon, Web sitesi veya Harici mesajlaşma/sosyal medya bilgileri paylaşmadan tekrar deneyin.',
-          timestamp: nowIso,
-          status: 'sent' as const,
-          isSystem: true
-        };
-
-        await setDoc(talkoMsgRef, talkoMsg);
-        await setDoc(talkoConvRef, {
-          id: talkoConvId,
-          participants: ['TALKO', currentUser.talkoNumber],
-          participantUsers: [talkoSystemUser, currentUser],
-          lastMessage: talkoMsg,
-          unreadCount: { [currentUser.talkoNumber]: 1 },
-          typingUsers: [],
-          updatedAt: nowIso
-        }, { merge: true });
-      } catch (err) {
-        console.error("Error creating TALKO filter notification:", err);
-      }
-
-      // Kampanya kaydını Firestore'a "filter_blocked" olarak kaydet
-      try {
-        const campRef = doc(collection(db, 'business_campaigns'));
-        const blockedCamp: BusinessCampaign = {
-          id: campRef.id,
-          businessId: currentUser.id,
-          businessTalkoNumber: currentUser.talkoNumber,
-          senderTitle,
-          content: trimmedContent,
-          recipientCount: selectedUserIds.size,
-          deliveredCount: 0,
-          readCount: 0,
-          spamCount: 0,
-          blockedCount: 0,
-          createdAt: nowIso,
-          recipients: Array.from(selectedUserIds).map(id => {
-            const u = allUsers.find(x => x.id === id);
-            return u ? u.talkoNumber : id;
-          }),
-          isFilterBlocked: true,
-          filterReasons: filterResult.reasons,
-          status: 'filter_blocked'
-        };
-
-        await setDoc(campRef, blockedCamp);
-      } catch (err) {
-        console.error("Error logging blocked campaign record:", err);
-      }
-
-      setIsSending(false);
-      return;
-    }
-
-    // 2. Normal Mesaj Gönderimi
     let delivered = 0;
     let spamCount = 0;
     let blockedCount = 0;
 
     const targetUsers = allUsers.filter(u => selectedUserIds.has(u.id));
-    const isSpamContent = checkIsSpam(trimmedContent);
 
     try {
       for (const targetUser of targetUsers) {
@@ -311,13 +225,20 @@ export const BusinessPanel: React.FC<BusinessPanelProps> = ({ currentUser, onClo
 
         await setDoc(msgRef, newMsg);
 
-        // Fetch existing conv doc to update unread
+        // Fetch existing conv doc
         const existingConvSnap = await getDoc(convRef);
         let unreadCount: Record<string, number> = {};
         if (existingConvSnap.exists()) {
           unreadCount = existingConvSnap.data().unreadCount || {};
         }
-        unreadCount[targetUser.talkoNumber] = (unreadCount[targetUser.talkoNumber] || 0) + 1;
+
+        // If SPAM: Do NOT increment unread badge for recipient (zero notification/sound)
+        if (!isSpamContent) {
+          unreadCount[targetUser.talkoNumber] = (unreadCount[targetUser.talkoNumber] || 0) + 1;
+          delivered++;
+        } else {
+          spamCount++;
+        }
 
         await setDoc(convRef, {
           id: convId,
@@ -327,38 +248,107 @@ export const BusinessPanel: React.FC<BusinessPanelProps> = ({ currentUser, onClo
           unreadCount,
           typingUsers: [],
           updatedAt: nowIso,
-          isCorporate: true,
+          isCorporate: !isSpamContent,
           isSpam: isSpamContent
         }, { merge: true });
-
-        if (isSpamContent) {
-          spamCount++;
-        } else {
-          delivered++;
-        }
       }
 
-      // Record Successful Campaign in Firestore
-      const campRef = doc(collection(db, 'business_campaigns'));
-      const newCamp: BusinessCampaign = {
-        id: campRef.id,
-        businessId: currentUser.id,
-        businessTalkoNumber: currentUser.talkoNumber,
-        senderTitle,
-        content: trimmedContent,
-        recipientCount: targetUsers.length,
-        deliveredCount: delivered,
-        readCount: 0,
-        spamCount,
-        blockedCount,
-        createdAt: nowIso,
-        recipients: targetUsers.map(u => u.talkoNumber),
-        status: 'delivered'
-      };
+      // If Filter Blocked (safety rules triggered), trigger modal & Talko safety alert notification
+      if (filterResult.isBlocked) {
+        setBlockedWarningModalData({
+          reasons: filterResult.reasons,
+          content: trimmedContent,
+          recipientCount: targetUsers.length
+        });
 
-      await setDoc(campRef, newCamp);
+        // TALKO Otomatik Sistem Bildirimi oluştur
+        try {
+          const talkoConvId = `TALKO_${currentUser.talkoNumber}`;
+          const talkoConvRef = doc(db, 'conversations', talkoConvId);
+          const talkoMsgRef = doc(collection(db, 'conversations', talkoConvId, 'messages'));
 
-      setSendSuccessMessage(`✅ Toplu mesaj gönderildi! (${delivered} Teslim Edildi, ${spamCount} Spam'e Düştü, ${blockedCount} Engellendi)`);
+          const talkoSystemUser: User = {
+            id: 'talko_system',
+            talkoNumber: 'TALKO',
+            username: 'TALKO',
+            avatarColor: 'blue',
+            isOnline: true,
+            lastSeen: nowIso,
+            isBanned: false,
+            isSystemAccount: true
+          };
+
+          const talkoMsg = {
+            id: talkoMsgRef.id,
+            conversationId: talkoConvId,
+            senderId: 'talko_system',
+            senderNumber: 'TALKO',
+            senderName: 'TALKO',
+            senderAvatarColor: 'blue' as AvatarColor,
+            content: 'TALKO GÜVENLİK BİLDİRİMİ: Kurumsal gönderiminiz güvenlik politikaları nedeniyle alıcıların Spam klasörüne yönlendirildi. Lütfen E-posta, Telefon, Web sitesi veya Harici mesajlaşma/sosyal medya bilgileri paylaşmadan tekrar deneyin.',
+            timestamp: nowIso,
+            status: 'sent' as const,
+            isSystem: true
+          };
+
+          await setDoc(talkoMsgRef, talkoMsg);
+          await setDoc(talkoConvRef, {
+            id: talkoConvId,
+            participants: ['TALKO', currentUser.talkoNumber],
+            participantUsers: [talkoSystemUser, currentUser],
+            lastMessage: talkoMsg,
+            unreadCount: { [currentUser.talkoNumber]: 1 },
+            typingUsers: [],
+            updatedAt: nowIso
+          }, { merge: true });
+        } catch (err) {
+          console.error("Error creating TALKO filter notification:", err);
+        }
+
+        // Log campaign as filter_blocked
+        const campRef = doc(collection(db, 'business_campaigns'));
+        const blockedCamp: BusinessCampaign = {
+          id: campRef.id,
+          businessId: currentUser.id,
+          businessTalkoNumber: currentUser.talkoNumber,
+          senderTitle,
+          content: trimmedContent,
+          recipientCount: targetUsers.length,
+          deliveredCount: delivered,
+          readCount: 0,
+          spamCount,
+          blockedCount,
+          createdAt: nowIso,
+          recipients: targetUsers.map(u => u.talkoNumber),
+          isFilterBlocked: true,
+          filterReasons: filterResult.reasons,
+          status: 'filter_blocked'
+        };
+
+        await setDoc(campRef, blockedCamp);
+      } else {
+        // Record Clean Successful Campaign in Firestore
+        const campRef = doc(collection(db, 'business_campaigns'));
+        const newCamp: BusinessCampaign = {
+          id: campRef.id,
+          businessId: currentUser.id,
+          businessTalkoNumber: currentUser.talkoNumber,
+          senderTitle,
+          content: trimmedContent,
+          recipientCount: targetUsers.length,
+          deliveredCount: delivered,
+          readCount: 0,
+          spamCount,
+          blockedCount,
+          createdAt: nowIso,
+          recipients: targetUsers.map(u => u.talkoNumber),
+          status: 'delivered'
+        };
+
+        await setDoc(campRef, newCamp);
+        setSendSuccessMessage(`✅ Toplu mesaj gönderildi! (${delivered} Teslim Edildi, ${spamCount} Spam'e Düştü, ${blockedCount} Engellendi)`);
+      }
+
       setMessageContent('');
       setSelectedUserIds(new Set());
     } catch (err: any) {
@@ -886,9 +876,9 @@ export const BusinessPanel: React.FC<BusinessPanelProps> = ({ currentUser, onClo
               </div>
               <div>
                 <h3 className="text-lg font-black text-white leading-tight">
-                  Bu mesaj platform güvenlik kurallarını ihlal ettiği için gönderilemedi.
+                  Bu mesaj platform güvenlik kurallarını ihlal ettiği için alıcıların Spam klasörüne yönlendirildi.
                 </h3>
-                <span className="text-xs text-red-400 font-semibold">Talko Business Otomatik İçerik Filtresi</span>
+                <span className="text-xs text-yellow-400 font-semibold">Talko Business Güvenlik & Spam Filtresi</span>
               </div>
             </div>
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
 import { db, auth } from '../lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, doc, getDoc, setDoc, getDocs } from 'firebase/firestore';
-import { Conversation, Message, User, AvatarColor, getDisplayName, isUserOnline } from '../types';
+import { Conversation, Message, User, AvatarColor, getDisplayName, isUserOnline, checkIsSpam } from '../types';
 import { Header } from './Header';
 import { ChatList } from './ChatList';
 import { ChatView } from './ChatView';
@@ -315,6 +315,28 @@ export const MainApp: React.FC = () => {
         const prevTs = lastNotifiedRef.current[conv.id];
         const currentTs = lastMsg.timestamp;
         
+        const otherUser = conv.participantUsers.find(u => u.talkoNumber !== talkoUser.talkoNumber) || conv.participantUsers[0];
+        const isProtected = otherUser.isSystemAccount || otherUser.talkoNumber === 'TALKO';
+        const isBlocked = !isProtected && (
+          (talkoUser.blockedSenders || []).includes(otherUser.talkoNumber) ||
+          (talkoUser.blockedSenders || []).includes(otherUser.alphanumericName || '') ||
+          (talkoUser.blockedSenders || []).includes(otherUser.username) ||
+          (talkoUser.blockedConvs || []).includes(conv.id)
+        );
+        const isNotSpamManually = (talkoUser.notSpamConvs || []).includes(conv.id);
+        const isSpam = !isProtected && !isBlocked && !isNotSpamManually && (
+          (talkoUser.spamConvs || []).includes(conv.id) ||
+          conv.isSpam ||
+          lastMsg.isSpam ||
+          checkIsSpam(lastMsg.content)
+        );
+
+        // 🔔 Strictly NO sound, NO desktop notifications for SPAM or BLOCKED conversations
+        if (isSpam || isBlocked) {
+          lastNotifiedRef.current[conv.id] = currentTs;
+          return;
+        }
+
         if (prevTs && currentTs > prevTs) {
           if (activeConversation?.id !== conv.id || document.visibilityState === 'hidden') {
             if (activeConversation?.id !== conv.id && soundManager.isSoundEnabled()) {
