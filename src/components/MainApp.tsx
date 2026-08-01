@@ -166,11 +166,23 @@ export const MainApp: React.FC = () => {
         });
       }
 
-      // Check if security verification message was sent
-      const msgsQ = query(collection(db, 'conversations', convId, 'messages'), where('isSecurityVerification', '==', true));
-      const msgsSnap = await getDocs(msgsQ);
+      let hasSecurityMsg = false;
+      try {
+        const msgsQ = query(collection(db, 'conversations', convId, 'messages'), where('isSecurityVerification', '==', true));
+        const msgsSnap = await getDocs(msgsQ);
+        hasSecurityMsg = !msgsSnap.empty;
+      } catch (err) {
+        // Fallback in case of index error
+        const fallbackQ = query(collection(db, 'conversations', convId, 'messages'));
+        const fallbackSnap = await getDocs(fallbackQ);
+        fallbackSnap.forEach(doc => {
+          if (doc.data().isSecurityVerification === true) {
+            hasSecurityMsg = true;
+          }
+        });
+      }
       
-      if (msgsSnap.empty) {
+      if (!hasSecurityMsg) {
         const secMsgRef = doc(collection(db, 'conversations', convId, 'messages'));
         const secContent = 'Hesabınızın güvenliğini artırmak amacıyla kimlik doğrulama işlemini tamamlamanız önerilir.';
         const secTs = new Date(Date.now() + 1000).toISOString();
@@ -204,6 +216,10 @@ export const MainApp: React.FC = () => {
     };
     
     migrateAndCheckTalko();
+    
+    // Also check when window gets focus to ensure it runs without reload
+    window.addEventListener('focus', migrateAndCheckTalko);
+    return () => window.removeEventListener('focus', migrateAndCheckTalko);
   }, [talkoUser?.id]);
 
   // Load TALKO system account safely
