@@ -133,6 +133,17 @@ export const getDisplayName = (user: Partial<User> | null | undefined): string =
   return user.talkoNumber || user.username || 'Bilinmeyen Numara';
 };
 
+export const isBusinessAccountUser = (user: Partial<User> | null | undefined): boolean => {
+  if (!user) return false;
+  const u = user as any;
+  if (u.role === 'business') return true;
+  if (u.isBusinessAccount) return true;
+  if (u.isAlphanumericSender) return true;
+  if (u.email?.toLowerCase()?.includes('devy.build')) return true;
+  if (u.username === 'DEVYBUILD' || u.businessTitle === 'DEVYBUILD') return true;
+  return false;
+};
+
 export const isUserOnline = (user: Partial<User> | null | undefined): boolean => {
   if (!user || !user.isOnline) return false;
   if (user.settings?.onlineStatus === false) return false;

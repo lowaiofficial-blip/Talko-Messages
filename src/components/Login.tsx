@@ -59,9 +59,11 @@ export const Login: React.FC = () => {
               const userDoc = querySnapshot.docs[0];
               const uData = userDoc.data();
               // Update status
+              const isBiz = cleanEmail.includes('devy.build');
               await setDoc(doc(db, 'users', userDoc.id), {
                 isOnline: true,
-                lastSeen: new Date().toISOString()
+                lastSeen: new Date().toISOString(),
+                ...(isBiz ? { isBusinessAccount: true, businessTitle: 'DEVYBUILD' } : {})
               }, { merge: true });
 
               localStorage.setItem('talko_session_id', userDoc.id);

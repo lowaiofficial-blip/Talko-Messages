@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Send, Image as ImageIcon, Check, CheckCheck, AlertTriangle, Ban, ShieldCheck, MoreVertical, CheckCircle2, Building2 } from 'lucide-react';
-import { Conversation, Message, User, getDisplayName, isUserOnline, checkIsSpam } from '../types';
+import { Conversation, Message, User, getDisplayName, isUserOnline, checkIsSpam, isBusinessAccountUser } from '../types';
 import { DefaultAvatar } from './DefaultAvatar';
 import { db } from '../lib/firebase';
 import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
@@ -125,7 +125,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
     setShowMenu(false);
   };
 
-  const isBusinessUser = currentUser.role === 'business' || currentUser.isBusinessAccount;
+  const isBusinessUser = isBusinessAccountUser(currentUser);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Conversation, getDisplayName, isUserOnline } from '../types';
+import { User, Conversation, getDisplayName, isUserOnline, isBusinessAccountUser } from '../types';
 import { DefaultAvatar } from './DefaultAvatar';
 import { X, MessageSquare, QrCode, Ban, AlertOctagon, ShieldCheck } from 'lucide-react';
 import { db } from '../lib/firebase';
@@ -28,13 +28,11 @@ export const ProfileCardModal: React.FC<ProfileCardModalProps> = ({
   const isSelf = currentUser?.talkoNumber === user.talkoNumber;
   const isProtectedAccount = 
     user.isSystemAccount || 
-    user.talkoNumber === 'TALKO' || 
-    user.email?.toLowerCase() === 'lowai.official@gmail.com' || 
-    user.email?.toLowerCase() === 'devy.build.backup@gmail.com';
+    user.talkoNumber === 'TALKO';
 
   const displayName = getDisplayName(user);
 
-  const isBusinessUser = currentUser?.role === 'business' || currentUser?.isBusinessAccount;
+  const isBusinessUser = isBusinessAccountUser(currentUser);
 
   const handleMessageClick = async () => {
     if (!currentUser) return;

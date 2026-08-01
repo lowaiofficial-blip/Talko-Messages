@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
 import { db, auth } from '../lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, doc, getDoc, setDoc, getDocs } from 'firebase/firestore';
-import { Conversation, Message, User, AvatarColor, getDisplayName, isUserOnline, checkIsSpam } from '../types';
+import { Conversation, Message, User, AvatarColor, getDisplayName, isUserOnline, checkIsSpam, isBusinessAccountUser } from '../types';
 import { Header } from './Header';
 import { ChatList } from './ChatList';
 import { ChatView } from './ChatView';
@@ -479,7 +479,7 @@ export const MainApp: React.FC = () => {
     const checkRoutes = () => {
       const path = window.location.pathname;
       const hash = window.location.hash;
-      const isBizUser = talkoUser?.role === 'business' || talkoUser?.isBusinessAccount;
+      const isBizUser = isBusinessAccountUser(talkoUser);
 
       if (path === '/admin' || path.startsWith('/admin') || hash === '#/admin' || hash === '#admin' || hash.includes('secret-admin-talko')) {
         setIsAdminView(true);

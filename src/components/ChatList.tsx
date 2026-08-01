@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Conversation, User, getDisplayName, isUserOnline, checkIsSpam } from '../types';
+import { Conversation, User, getDisplayName, isUserOnline, checkIsSpam, isBusinessAccountUser } from '../types';
 import { DefaultAvatar } from './DefaultAvatar';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
@@ -31,7 +31,7 @@ export const ChatList: React.FC<ChatListProps> = ({
   const [globalSearchResult, setGlobalSearchResult] = useState<User | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
-  const isBusinessUser = currentUser.role === 'business' || currentUser.isBusinessAccount;
+  const isBusinessUser = isBusinessAccountUser(currentUser);
 
   useEffect(() => {
     if (!searchQuery.trim() || isBusinessUser) {
