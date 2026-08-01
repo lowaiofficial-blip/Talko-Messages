@@ -168,11 +168,6 @@ export const MainApp: React.FC = () => {
 
       let hasSecurityMsg = false;
       try {
-        const msgsQ = query(collection(db, 'conversations', convId, 'messages'), where('isSecurityVerification', '==', true));
-        const msgsSnap = await getDocs(msgsQ);
-        hasSecurityMsg = !msgsSnap.empty;
-      } catch (err) {
-        // Fallback in case of index error
         const fallbackQ = query(collection(db, 'conversations', convId, 'messages'));
         const fallbackSnap = await getDocs(fallbackQ);
         fallbackSnap.forEach(doc => {
@@ -180,6 +175,8 @@ export const MainApp: React.FC = () => {
             hasSecurityMsg = true;
           }
         });
+      } catch (err) {
+        console.error("Error checking security msg:", err);
       }
       
       if (!hasSecurityMsg) {

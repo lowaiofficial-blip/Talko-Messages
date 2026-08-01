@@ -27,6 +27,44 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
     otherUser.isSystemAccount || 
     otherUser.talkoNumber === 'TALKO';
 
+  // Resilient Security Message Injection for TALKO chat
+  useEffect(() => {
+    if (otherUser.talkoNumber !== 'TALKO') return;
+    const hasSec = messages.some(m => m.isSecurityVerification);
+    if (!hasSec && messages.length > 0) {
+      const addSecMsg = async () => {
+        try {
+          const secMsgRef = doc(collection(db, 'conversations', conversation.id, 'messages'));
+          const secContent = 'Hesabınızın güvenliğini artırmak amacıyla kimlik doğrulama işlemini tamamlamanız önerilir.';
+          const secTs = new Date(Date.now() + 1000).toISOString();
+          
+          const secMsgData = {
+            id: secMsgRef.id,
+            conversationId: conversation.id,
+            senderId: 'system_talko',
+            senderNumber: 'TALKO',
+            senderName: 'TALKO',
+            senderAvatarColor: 'blue',
+            content: secContent,
+            timestamp: secTs,
+            status: 'sent',
+            isSystem: true,
+            isSecurityVerification: true
+          };
+
+          await setDoc(secMsgRef, secMsgData);
+          await setDoc(doc(db, 'conversations', conversation.id), {
+            lastMessage: secMsgData,
+            updatedAt: secTs
+          }, { merge: true });
+        } catch (err) {
+          console.error("Failed to inject security message:", err);
+        }
+      };
+      addSecMsg();
+    }
+  }, [conversation.id, messages, otherUser.talkoNumber]);
+
   // Check if sender is blocked or conversation is in spam
   const isBlocked = !isProtectedAccount && (
     (currentUser.blockedSenders || []).includes(otherUser.talkoNumber) ||
