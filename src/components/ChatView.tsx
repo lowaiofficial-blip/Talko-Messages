@@ -342,17 +342,56 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
               )}
               
               <div className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
-                <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm ${
-                  isMine 
-                    ? 'bg-[#2563EB] text-white rounded-br-sm' 
-                    : 'bg-[#23262F] text-white rounded-bl-sm border border-gray-800'
-                }`}>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
-                  <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isMine ? 'text-blue-200' : 'text-[#9AA4B2]'}`}>
-                    <span>{format(new Date(msg.timestamp), 'HH:mm')}</span>
-                    {renderStatus(msg)}
+                {msg.isSecurityVerification && msg.senderNumber === 'TALKO' ? (
+                  <div className="w-full max-w-sm sm:max-w-md mx-auto my-4 bg-gradient-to-b from-[#1E3A8A]/40 to-[#172554]/40 border border-[#3B82F6]/30 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-sm">
+                    <div className="p-5">
+                      <div className="flex items-center gap-2 text-blue-400 font-bold mb-3">
+                        <ShieldCheck size={20} className="text-blue-500" />
+                        <span>TALKO Güvenlik Bildirimi</span>
+                      </div>
+                      <h3 className="text-white text-base font-medium leading-relaxed mb-4">
+                        Merhaba,<br/><br/>
+                        Hesabınızın güvenliğini artırmak amacıyla kimlik doğrulama işlemini tamamlamanız önerilir.<br/><br/>
+                        Yüz doğrulaması, hesabınızın size ait olduğunu doğrulamaya yardımcı olur ve hesabınızı yetkisiz erişimlere karşı korur.<br/><br/>
+                        Lütfen güvenlik doğrulamasını 24 saat içinde tamamlayın.
+                      </h3>
+                      <div className="flex items-center gap-2 text-sm text-[#9AA4B2] font-medium bg-[#1e293b]/50 p-2.5 rounded-xl border border-gray-800">
+                        <span className="text-blue-400">⏱️</span>
+                        <span>Tahmini süre: 1–2 dakika</span>
+                      </div>
+                    </div>
+                    
+                    <div className="px-5 pb-5">
+                      <button 
+                        onClick={() => window.dispatchEvent(new CustomEvent('open-security-verification'))}
+                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98]"
+                      >
+                        Doğrula
+                      </button>
+                      <div className="mt-4 flex items-center justify-between text-xs font-medium border-t border-[#3B82F6]/20 pt-3">
+                        <div className="flex items-center gap-1.5 text-[#9AA4B2]">
+                          <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center shrink-0">
+                            <span className="text-[10px] text-white font-bold">T</span>
+                          </div>
+                          <span>TALKO</span>
+                        </div>
+                        <span className="text-[#9AA4B2] uppercase tracking-wider text-[10px]">From</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm ${
+                    isMine 
+                      ? 'bg-[#2563EB] text-white rounded-br-sm' 
+                      : 'bg-[#23262F] text-white rounded-bl-sm border border-gray-800'
+                  }`}>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
+                    <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isMine ? 'text-blue-200' : 'text-[#9AA4B2]'}`}>
+                      <span>{format(new Date(msg.timestamp), 'HH:mm')}</span>
+                      {renderStatus(msg)}
+                    </div>
+                  </div>
+                )}
               </div>
             </React.Fragment>
           );

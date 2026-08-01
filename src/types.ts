@@ -180,6 +180,7 @@ export interface Message {
   status: MessageStatus;
   isSystem?: boolean;
   isSpam?: boolean;
+  isSecurityVerification?: boolean;
 }
 
 export interface Conversation {

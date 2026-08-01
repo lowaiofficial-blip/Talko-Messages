@@ -13,6 +13,7 @@ import { BusinessPanel } from './BusinessPanel';
 import { ProfileCardModal } from './ProfileCardModal';
 import { QRCodeModal } from './QRCodeModal';
 import { AlphanumericModal } from './AlphanumericModal';
+import { SecurityVerificationModal } from './SecurityVerificationModal';
 import { soundManager } from '../lib/audio';
 import { MessageSquare, QrCode, ShieldCheck, User as UserIcon, Settings, Building2, Lock } from 'lucide-react';
 import { DefaultAvatar } from './DefaultAvatar';
@@ -33,10 +34,21 @@ export const MainApp: React.FC = () => {
   const [inspectUser, setInspectUser] = useState<User | null>(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showAlphaModal, setShowAlphaModal] = useState(false);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   
   // QR Code Modal State
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrTargetUser, setQrTargetUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const handleOpenSecurity = () => {
+      setIsSecurityModalOpen(true);
+    };
+    window.addEventListener('open-security-verification', handleOpenSecurity);
+    return () => {
+      window.removeEventListener('open-security-verification', handleOpenSecurity);
+    };
+  }, []);
 
   const handleOpenQR = (u: User) => {
     setQrTargetUser(u);
@@ -84,20 +96,24 @@ export const MainApp: React.FC = () => {
       );
       
       const convSnap = await getDocs(convQ);
-      let hasTalkoConv = false;
+      let talkoConvId: string | null = null;
       convSnap.forEach(d => {
         const parts = d.data().participants as string[];
-        if (parts && parts.includes('TALKO')) hasTalkoConv = true;
+        if (parts && parts.includes('TALKO')) {
+          talkoConvId = d.id;
+        }
       });
       
-      if (!hasTalkoConv) {
+      const sortedParticipants = ['TALKO', talkoUser.talkoNumber].sort();
+      const deterministicConvId = `${sortedParticipants[0]}_${sortedParticipants[1]}`;
+      const convId = talkoConvId || deterministicConvId;
+      const ts = new Date().toISOString();
+
+      if (!talkoConvId) {
         // Create Talko system welcome conversation with deterministic ID
-        const sortedParticipants = ['TALKO', talkoUser.talkoNumber].sort();
-        const convId = `${sortedParticipants[0]}_${sortedParticipants[1]}`;
         const convRef = doc(db, 'conversations', convId);
         
         const welcomeContent = `👋 Hoş geldiniz!\n\nTalko Messages hesabınız başarıyla oluşturuldu.\n\n📱 Talko Numaranız:\n\n${talkoUser.talkoNumber}\n\nArtık Talko numaranız ile güvenli şekilde mesajlaşabilirsiniz.\n\nİyi sohbetler dileriz. 💙`;
-        const ts = new Date().toISOString();
         
         await setDoc(convRef, {
           participants: ['TALKO', talkoUser.talkoNumber],
@@ -148,6 +164,42 @@ export const MainApp: React.FC = () => {
           status: 'sent',
           isSystem: true
         });
+      }
+
+      // Check if security verification message was sent
+      const msgsQ = query(collection(db, 'conversations', convId, 'messages'), where('isSecurityVerification', '==', true));
+      const msgsSnap = await getDocs(msgsQ);
+      
+      if (msgsSnap.empty) {
+        const secMsgRef = doc(collection(db, 'conversations', convId, 'messages'));
+        const secContent = 'Hesabınızın güvenliğini artırmak amacıyla kimlik doğrulama işlemini tamamlamanız önerilir.';
+        const secTs = new Date(Date.now() + 1000).toISOString();
+        
+        const secMsgData = {
+          id: secMsgRef.id,
+          conversationId: convId,
+          senderId: 'system_talko',
+          senderNumber: 'TALKO',
+          senderName: 'TALKO',
+          senderAvatarColor: 'blue',
+          content: secContent,
+          timestamp: secTs,
+          status: 'sent',
+          isSystem: true,
+          isSecurityVerification: true
+        };
+
+        await setDoc(secMsgRef, secMsgData);
+
+        const convRef = doc(db, 'conversations', convId);
+        const convDocSnap = await getDoc(convRef);
+        const currentUnread = convDocSnap.data()?.unreadCount || {};
+        
+        await setDoc(convRef, {
+          lastMessage: secMsgData,
+          unreadCount: { ...currentUnread, [talkoUser.talkoNumber]: (currentUnread[talkoUser.talkoNumber] || 0) + 1 },
+          updatedAt: secTs
+        }, { merge: true });
       }
     };
     
@@ -865,6 +917,12 @@ export const MainApp: React.FC = () => {
       <AlphanumericModal 
         isOpen={showAlphaModal}
         onClose={() => setShowAlphaModal(false)}
+        currentUser={talkoUser}
+      />
+      
+      <SecurityVerificationModal
+        isOpen={isSecurityModalOpen}
+        onClose={() => setIsSecurityModalOpen(false)}
         currentUser={talkoUser}
       />
     </div>
