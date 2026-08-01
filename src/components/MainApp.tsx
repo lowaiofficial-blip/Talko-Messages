@@ -479,10 +479,12 @@ export const MainApp: React.FC = () => {
     const checkRoutes = () => {
       const path = window.location.pathname;
       const hash = window.location.hash;
+      const isBizUser = talkoUser?.role === 'business' || talkoUser?.isBusinessAccount;
+
       if (path === '/admin' || path.startsWith('/admin') || hash === '#/admin' || hash === '#admin' || hash.includes('secret-admin-talko')) {
         setIsAdminView(true);
         setIsBusinessView(false);
-      } else if (path === '/business' || path.startsWith('/business') || hash === '#/business' || hash === '#business') {
+      } else if (path === '/business' || path.startsWith('/business') || hash === '#/business' || hash === '#business' || isBizUser) {
         setIsBusinessView(true);
         setIsAdminView(false);
       } else {
@@ -498,7 +500,7 @@ export const MainApp: React.FC = () => {
       window.removeEventListener('popstate', checkRoutes);
       window.removeEventListener('hashchange', checkRoutes);
     };
-  }, []);
+  }, [talkoUser]);
 
   if (!talkoUser) return null;
 

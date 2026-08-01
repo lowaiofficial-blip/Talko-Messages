@@ -31,8 +31,10 @@ export const ChatList: React.FC<ChatListProps> = ({
   const [globalSearchResult, setGlobalSearchResult] = useState<User | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
+  const isBusinessUser = currentUser.role === 'business' || currentUser.isBusinessAccount;
+
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    if (!searchQuery.trim() || isBusinessUser) {
       setGlobalSearchResult(null);
       return;
     }
@@ -69,6 +71,7 @@ export const ChatList: React.FC<ChatListProps> = ({
   }, [searchQuery, currentUser.talkoNumber]);
 
   const handleStartGlobalChat = async (user: User) => {
+    if (isBusinessUser) return;
     const sortedParticipants = [currentUser.talkoNumber, user.talkoNumber].sort();
     const convId = `${sortedParticipants[0]}_${sortedParticipants[1]}`;
 
@@ -176,6 +179,29 @@ export const ChatList: React.FC<ChatListProps> = ({
 
   return (
     <div className="flex flex-col p-2 space-y-2">
+
+      {/* 🏢 Business Mode Banner */}
+      {isBusinessUser && (
+        <div className="mx-1 my-1 p-3.5 bg-gradient-to-r from-blue-950/60 to-indigo-950/60 border border-blue-500/30 rounded-2xl flex flex-col items-center text-center gap-2 shadow-lg">
+          <div className="flex items-center gap-2 text-blue-400 font-bold text-xs">
+            <Building2 size={16} />
+            <span>Kurumsal Gönderici Modu</span>
+          </div>
+          <p className="text-[11px] text-[#9AA4B2] leading-relaxed">
+            Business hesapları yalnızca kurumsal gönderici olarak çalışır. Bireysel sohbet başlatamaz veya mesaj atamaz.
+          </p>
+          <button
+            onClick={() => {
+              window.history.pushState({}, '', '/business');
+              window.dispatchEvent(new Event('popstate'));
+            }}
+            className="mt-0.5 px-4 py-2 bg-[#2563EB] hover:bg-blue-600 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-blue-500/20 flex items-center gap-1.5"
+          >
+            <Building2 size={14} />
+            <span>Business Panel'ine Git</span>
+          </button>
+        </div>
+      )}
       
       {/* 📁 Folder Selector Tabs */}
       <div className="flex items-center gap-1.5 px-1 py-1 overflow-x-auto no-scrollbar border-b border-[#23262F] pb-2.5 shrink-0">

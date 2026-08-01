@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Send, Image as ImageIcon, Check, CheckCheck, AlertTriangle, Ban, ShieldCheck, MoreVertical, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Send, Image as ImageIcon, Check, CheckCheck, AlertTriangle, Ban, ShieldCheck, MoreVertical, CheckCircle2, Building2 } from 'lucide-react';
 import { Conversation, Message, User, getDisplayName, isUserOnline, checkIsSpam } from '../types';
 import { DefaultAvatar } from './DefaultAvatar';
 import { db } from '../lib/firebase';
@@ -125,9 +125,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
     setShowMenu(false);
   };
 
+  const isBusinessUser = currentUser.role === 'business' || currentUser.isBusinessAccount;
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || isBlocked) return;
+    if (isBusinessUser || !inputText.trim() || isBlocked) return;
     
     const content = inputText.trim();
     setInputText('');
@@ -365,6 +367,32 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
       ) : isBlocked ? (
         <div className="p-4 bg-[#181B22] border-t border-gray-800 text-center text-red-400 font-bold text-xs">
           Engellenmiş göndericilere mesaj gönderemezsiniz.
+        </div>
+      ) : isBusinessUser ? (
+        <div className="p-5 bg-[#181B22] border-t border-[#23262F] flex flex-col items-center justify-center text-center gap-3">
+          <div className="flex items-center gap-2 text-amber-400 font-bold text-xs bg-amber-500/10 px-3.5 py-1.5 rounded-xl border border-amber-500/20 shadow-sm">
+            <Building2 size={16} />
+            <span>Kurumsal Gönderici Hesabı</span>
+          </div>
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-white">
+              Kurumsal gönderici hesapları normal sohbet için kullanılamaz.
+            </h3>
+            <p className="text-xs text-[#9AA4B2] max-w-sm">
+              Mesaj göndermek için Talko Business Panel'ini kullanın.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              window.history.pushState({}, '', '/business');
+              window.dispatchEvent(new Event('popstate'));
+            }}
+            className="mt-1 px-5 py-2.5 bg-[#2563EB] hover:bg-blue-600 text-white font-bold text-xs rounded-2xl shadow-lg shadow-blue-500/20 transition-all flex items-center gap-2"
+          >
+            <Building2 size={16} />
+            <span>Business Panel'ine Git</span>
+          </button>
         </div>
       ) : (
         <form onSubmit={handleSend} className="p-3 bg-[#181B22] border-t border-gray-800 flex items-end gap-2">

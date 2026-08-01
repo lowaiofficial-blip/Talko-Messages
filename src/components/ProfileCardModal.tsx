@@ -34,8 +34,14 @@ export const ProfileCardModal: React.FC<ProfileCardModalProps> = ({
 
   const displayName = getDisplayName(user);
 
+  const isBusinessUser = currentUser?.role === 'business' || currentUser?.isBusinessAccount;
+
   const handleMessageClick = async () => {
     if (!currentUser) return;
+    if (isBusinessUser) {
+      alert("Kurumsal gönderici hesapları normal sohbet için kullanılamaz. Lütfen Talko Business Panel'ini kullanın.");
+      return;
+    }
     
     const sortedParticipants = [currentUser.talkoNumber, user.talkoNumber].sort();
     const convId = `${sortedParticipants[0]}_${sortedParticipants[1]}`;
@@ -121,7 +127,7 @@ export const ProfileCardModal: React.FC<ProfileCardModalProps> = ({
               <p className="font-mono text-xs text-[#2563EB] bg-[#2563EB]/10 px-2.5 py-1 rounded-lg font-bold">{user.talkoNumber}</p>
             </div>
             
-            {!isSelf && !user.isSystemAccount && (
+            {!isSelf && !user.isSystemAccount && !isBusinessUser && (
               <div className="w-full mt-6">
                 <button 
                   onClick={handleMessageClick}
