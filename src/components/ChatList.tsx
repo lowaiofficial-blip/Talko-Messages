@@ -133,6 +133,10 @@ export const ChatList: React.FC<ChatListProps> = ({
     if (isBlocked(c)) return false;
     if (currentUser.notSpamConvs?.includes(c.id)) return false;
     if (currentUser.spamConvs?.includes(c.id)) return true;
+    
+    const isSender = c.lastMessage?.senderNumber === currentUser.talkoNumber || c.lastMessage?.senderId === currentUser.id;
+    if (isSender) return false;
+
     if (c.isSpam) return true;
     return checkIsSpam(c.lastMessage?.content);
   };

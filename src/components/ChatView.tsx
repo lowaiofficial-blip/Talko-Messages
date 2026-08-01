@@ -36,7 +36,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
   );
 
   const isNotSpamManually = (currentUser.notSpamConvs || []).includes(conversation.id);
-  const isSpam = !isProtectedAccount && !isBlocked && !isNotSpamManually && (
+  const isSenderOfLastMessage = conversation.lastMessage?.senderNumber === currentUser.talkoNumber || conversation.lastMessage?.senderId === currentUser.id;
+  const isSpam = !isProtectedAccount && !isBlocked && !isNotSpamManually && !isSenderOfLastMessage && (
     (currentUser.spamConvs || []).includes(conversation.id) ||
     conversation.isSpam ||
     checkIsSpam(conversation.lastMessage?.content)
