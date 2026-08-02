@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Send, Image as ImageIcon, Check, CheckCheck, AlertTriangle, Ban, ShieldCheck, MoreVertical, CheckCircle2, Building2 } from 'lucide-react';
+import { ArrowLeft, Send, Image as ImageIcon, Check, CheckCheck, AlertTriangle, Ban, ShieldCheck, MoreVertical, CheckCircle2, Building2, Loader2 } from 'lucide-react';
 import { Conversation, Message, User, getDisplayName, isUserOnline, checkIsSpam, isBusinessAccountUser } from '../types';
 import { DefaultAvatar } from './DefaultAvatar';
 import { db } from '../lib/firebase';
@@ -19,6 +19,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
   const [inputText, setInputText] = useState('');
   const [showMenu, setShowMenu] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
   
   const otherUser = conversation.participantUsers.find(u => u.talkoNumber !== currentUser.talkoNumber) || conversation.participantUsers[0];
   const otherDisplayName = getDisplayName(otherUser);
@@ -26,44 +29,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
   const isProtectedAccount = 
     otherUser.isSystemAccount || 
     otherUser.talkoNumber === 'TALKO';
-
-  // Resilient Security Message Injection for TALKO chat
-  useEffect(() => {
-    if (otherUser.talkoNumber !== 'TALKO') return;
-    const hasSec = messages.some(m => m.isSecurityVerification);
-    if (!hasSec && messages.length > 0) {
-      const addSecMsg = async () => {
-        try {
-          const secMsgRef = doc(collection(db, 'conversations', conversation.id, 'messages'));
-          const secContent = 'Hesabınızın güvenliğini artırmak amacıyla kimlik doğrulama işlemini tamamlamanız önerilir.';
-          const secTs = new Date(Date.now() + 1000).toISOString();
-          
-          const secMsgData = {
-            id: secMsgRef.id,
-            conversationId: conversation.id,
-            senderId: 'system_talko',
-            senderNumber: 'TALKO',
-            senderName: 'TALKO',
-            senderAvatarColor: 'blue',
-            content: secContent,
-            timestamp: secTs,
-            status: 'sent',
-            isSystem: true,
-            isSecurityVerification: true
-          };
-
-          await setDoc(secMsgRef, secMsgData);
-          await setDoc(doc(db, 'conversations', conversation.id), {
-            lastMessage: secMsgData,
-            updatedAt: secTs
-          }, { merge: true });
-        } catch (err) {
-          console.error("Failed to inject security message:", err);
-        }
-      };
-      addSecMsg();
-    }
-  }, [conversation.id, messages, otherUser.talkoNumber]);
 
   // Check if sender is blocked or conversation is in spam
   const isBlocked = !isProtectedAccount && (
@@ -210,6 +175,92 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
     } catch (err) {
       console.error('Error sending message or updating conversation:', err);
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []) as File[];
+    if (files.length === 0) return;
+
+    if (files.length > 5) {
+      alert("En fazla 5 adet fotoğraf seçebilirsiniz.");
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    setIsUploading(true);
+    const totalFiles = files.length;
+    const IMGBB_API_KEY = (import.meta as any).env?.VITE_IMGBB_API_KEY || '1b1acded736668402c8136719fa92102';
+
+    if (soundManager.isSoundEnabled()) {
+      soundManager.playSendSound();
+    }
+
+    for (let i = 0; i < totalFiles; i++) {
+      const file = files[i];
+      setUploadProgress(`${i + 1}/${totalFiles}`);
+
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error('Upload failed');
+        }
+
+        const data = await response.json();
+        const imageUrl = data?.data?.url;
+
+        if (imageUrl) {
+          const msgId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+          const newMsgRef = doc(db, 'conversations', conversation.id, 'messages', msgId);
+          
+          const messageData: Message = {
+            id: msgId,
+            conversationId: conversation.id,
+            senderId: currentUser.id,
+            senderNumber: currentUser.talkoNumber,
+            senderName: getDisplayName(currentUser),
+            content: '📷 Fotoğraf',
+            attachment: {
+              type: 'photo',
+              url: imageUrl,
+              name: file.name,
+              size: `${Math.round(file.size / 1024)} KB`
+            },
+            timestamp: new Date().toISOString(),
+            status: 'sent'
+          };
+
+          await setDoc(newMsgRef, messageData);
+          
+          const convRef = doc(db, 'conversations', conversation.id);
+          const currentUnread = conversation.unreadCount || {};
+          const targetNumber = otherUser?.talkoNumber || 'TALKO';
+          const newUnread = { 
+            ...currentUnread,
+            [targetNumber]: (currentUnread[targetNumber] || 0) + 1
+          };
+          
+          await setDoc(convRef, {
+            lastMessage: messageData,
+            unreadCount: newUnread,
+            updatedAt: messageData.timestamp
+          }, { merge: true });
+        }
+      } catch (err) {
+        console.error('Failed to upload image:', err);
+        alert(`"${file.name}" yüklenirken bir hata oluştu.`);
+      }
+    }
+
+    setIsUploading(false);
+    setUploadProgress('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const setTyping = async (isTyping: boolean) => {
@@ -418,15 +469,31 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
                     </div>
                   </div>
                 ) : (
-                  <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 shadow-sm ${
+                  <div className={`max-w-[85%] sm:max-w-[75%] rounded-2xl overflow-hidden shadow-sm ${
                     isMine 
                       ? 'bg-[#2563EB] text-white rounded-br-sm' 
                       : 'bg-[#23262F] text-white rounded-bl-sm border border-gray-800'
                   }`}>
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
-                    <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isMine ? 'text-blue-200' : 'text-[#9AA4B2]'}`}>
-                      <span>{format(new Date(msg.timestamp), 'HH:mm')}</span>
-                      {renderStatus(msg)}
+                    {msg.attachment?.type === 'photo' && (
+                      <div className="relative cursor-pointer max-w-full">
+                        <a href={msg.attachment.url} target="_blank" rel="noopener noreferrer">
+                          <img 
+                            src={msg.attachment.url} 
+                            alt="Görsel" 
+                            referrerPolicy="no-referrer"
+                            className="max-h-72 w-full object-cover rounded-t-xl hover:opacity-90 transition-opacity"
+                          />
+                        </a>
+                      </div>
+                    )}
+                    <div className="px-4 py-2.5">
+                      {msg.content && msg.content !== '📷 Fotoğraf' && (
+                        <p className="text-sm leading-relaxed whitespace-pre-wrap break-words mb-1">{msg.content}</p>
+                      )}
+                      <div className={`flex items-center justify-end gap-1 text-[10px] ${isMine ? 'text-blue-200' : 'text-[#9AA4B2]'}`}>
+                        <span>{format(new Date(msg.timestamp), 'HH:mm')}</span>
+                        {renderStatus(msg)}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -436,6 +503,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
         })}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Uploading Status Banner */}
+      {isUploading && (
+        <div className="px-4 py-2 bg-blue-600/10 border-t border-blue-500/20 flex items-center gap-2 text-xs text-[#9AA4B2]">
+          <Loader2 size={14} className="animate-spin text-[#2563EB]" />
+          <span>Fotoğraf yükleniyor: <strong className="text-white">{uploadProgress}</strong></span>
+        </div>
+      )}
 
       {/* Input */}
       {otherUser.isSystemAccount ? (
@@ -474,8 +549,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
         </div>
       ) : (
         <form onSubmit={handleSend} className="p-3 bg-[#181B22] border-t border-gray-800 flex items-end gap-2">
-          <button type="button" className="p-3 text-[#9AA4B2] hover:text-white transition-colors rounded-xl shrink-0">
-            <ImageIcon size={20} />
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileChange} 
+            accept="image/*" 
+            multiple 
+            className="hidden" 
+          />
+          <button 
+            type="button" 
+            onClick={() => fileInputRef.current?.click()} 
+            disabled={isUploading}
+            className="p-3 text-[#9AA4B2] hover:text-white disabled:opacity-50 transition-colors rounded-xl shrink-0"
+          >
+            {isUploading ? (
+              <Loader2 size={20} className="animate-spin text-[#2563EB]" />
+            ) : (
+              <ImageIcon size={20} />
+            )}
           </button>
           <input 
             type="text"
@@ -487,7 +579,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
           />
           <button 
             type="submit"
-            disabled={!inputText.trim()}
+            disabled={!inputText.trim() || isUploading}
             className="p-3 bg-[#2563EB] text-white rounded-xl hover:bg-blue-600 disabled:opacity-50 disabled:bg-gray-800 disabled:text-[#9AA4B2] transition-colors shrink-0 shadow-lg shadow-blue-500/20"
           >
             <Send size={20} className={inputText.trim() ? 'ml-1' : ''} />

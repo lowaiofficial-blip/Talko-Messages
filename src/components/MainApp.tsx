@@ -59,9 +59,12 @@ export const MainApp: React.FC = () => {
   const lastNotifiedRef = React.useRef<Record<string, string>>({});
 
   // System migration and TALKO welcome chat for existing users
+  const checkingTalkoRef = React.useRef(false);
   useEffect(() => {
     const migrateAndCheckTalko = async () => {
       if (!auth.currentUser || !talkoUser) return;
+      if (checkingTalkoRef.current) return;
+      checkingTalkoRef.current = true;
       
       let needsUpdate = false;
       let updates: any = {};

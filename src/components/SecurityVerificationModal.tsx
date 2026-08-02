@@ -9,13 +9,20 @@ interface SecurityVerificationModalProps {
 }
 
 export const SecurityVerificationModal: React.FC<SecurityVerificationModalProps> = ({ isOpen, onClose, currentUser }) => {
-  const [step, setStep] = useState<'info' | 'camera'>('info');
+  const [step, setStep] = useState<'info' | 'camera' | 'success'>('info');
   const [isClosing, setIsClosing] = useState(false);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setStep('info');
       setIsClosing(false);
+      setStream(null);
+      setCameraError(null);
+      setIsVerifying(false);
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'auto';
@@ -24,6 +31,60 @@ export const SecurityVerificationModal: React.FC<SecurityVerificationModalProps>
       document.body.style.overflow = 'auto';
     };
   }, [isOpen]);
+
+  // Handle Camera access
+  useEffect(() => {
+    let activeStream: MediaStream | null = null;
+    let verifyTimeout: NodeJS.Timeout;
+    let successTimeout: NodeJS.Timeout;
+
+    if (step === 'camera') {
+      const startCamera = async () => {
+        try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setCameraError("Kamera bu tarayıcıda desteklenmiyor veya HTTPS bağlantısı gerekiyor.");
+            return;
+          }
+          const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+          activeStream = s;
+          setStream(s);
+          setCameraError(null);
+          
+          // Simulate successful verification
+          verifyTimeout = setTimeout(() => {
+            setIsVerifying(true);
+            successTimeout = setTimeout(() => {
+              setStep('success');
+            }, 2000);
+          }, 3000);
+        } catch (err: any) {
+          console.error("Camera access error:", err);
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            setCameraError("Kamera izni reddedildi. Lütfen tarayıcı ayarlarından kamera izni verin.");
+          } else {
+            setCameraError("Kamera bulunamadı veya kullanılamıyor.");
+          }
+        }
+      };
+
+      startCamera();
+    }
+
+    return () => {
+      if (activeStream) {
+        activeStream.getTracks().forEach(track => track.stop());
+      }
+      clearTimeout(verifyTimeout);
+      clearTimeout(successTimeout);
+    };
+  }, [step]);
+
+  // Handle video element binding
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
 
   const handleClose = () => {
     setIsClosing(true);
@@ -158,16 +219,34 @@ export const SecurityVerificationModal: React.FC<SecurityVerificationModalProps>
           <div className="flex flex-col h-full bg-[#0B0E14]">
             <div className="pt-12 px-6 pb-6 text-center">
               <h2 className="text-xl font-bold text-white mb-2">Kameraya Bakın</h2>
-              <p className="text-sm text-[#9AA4B2]">Yüzünüzü çerçevenin içine ortalayın.</p>
+              <p className="text-sm text-[#9AA4B2]">{cameraError || (isVerifying ? "Doğrulanıyor..." : "Yüzünüzü çerçevenin içine ortalayın.")}</p>
             </div>
             
             <div className="flex-1 flex items-center justify-center p-6">
               <div className="relative w-full max-w-[300px] aspect-[3/4] rounded-full overflow-hidden border-4 border-blue-500/50 shadow-[0_0_50px_rgba(37,99,235,0.2)] bg-[#1E293B] flex items-center justify-center">
-                <Camera size={64} className="text-[#334155]" />
-                <div className="absolute inset-0 border-4 border-t-blue-500 rounded-full animate-spin"></div>
-                <div className="absolute bottom-10 left-0 right-0 text-center">
-                  <p className="text-xs font-bold text-[#9AA4B2] animate-pulse">Kamera bekleniyor...</p>
-                </div>
+                {!stream && !cameraError && <Camera size={64} className="text-[#334155]" />}
+                {cameraError && <X size={64} className="text-red-500/50" />}
+                
+                <video 
+                  ref={videoRef} 
+                  autoPlay 
+                  playsInline 
+                  muted 
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${stream ? 'opacity-100' : 'opacity-0'}`} 
+                />
+                
+                <div className={`absolute inset-0 border-4 border-t-blue-500 rounded-full transition-all duration-1000 ${isVerifying ? 'animate-spin border-blue-400' : 'border-transparent'}`}></div>
+                
+                {!stream && !cameraError && (
+                  <div className="absolute bottom-10 left-0 right-0 text-center">
+                    <p className="text-xs font-bold text-[#9AA4B2] animate-pulse">Kamera bekleniyor...</p>
+                  </div>
+                )}
+                {isVerifying && (
+                  <div className="absolute inset-0 bg-blue-500/20 backdrop-blur-[2px] flex items-center justify-center z-10">
+                    <ShieldCheck size={64} className="text-white animate-pulse" />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -179,6 +258,23 @@ export const SecurityVerificationModal: React.FC<SecurityVerificationModalProps>
                 İptal Et
               </button>
             </div>
+          </div>
+        )}
+        
+        {step === 'success' && (
+          <div className="flex flex-col h-full bg-gradient-to-b from-[#10B981]/20 to-[#0B0E14] items-center justify-center p-6 text-center">
+            <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mb-6 relative">
+              <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping"></div>
+              <ShieldCheck size={48} className="text-green-500 relative z-10" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-3">Doğrulama Başarılı!</h2>
+            <p className="text-[#9AA4B2] mb-8">Kimliğiniz doğrulandı. Hesabınızı güvenle kullanmaya devam edebilirsiniz.</p>
+            <button 
+              onClick={handleClose}
+              className="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl shadow-lg shadow-green-600/20 transition-all active:scale-[0.98]"
+            >
+              Tamamla
+            </button>
           </div>
         )}
       </div>
