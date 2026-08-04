@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Lock, Bell, Building2, LogOut, ChevronRight, Volume2, QrCode, Phone, Shield, Ban, Copy, Check, EyeOff, Camera, Trash2, Upload, Loader2 } from 'lucide-react';
+import { Lock, Bell, Building2, LogOut, ChevronRight, Volume2, QrCode, Phone, Shield, Ban, Copy, Check, EyeOff, Camera, Trash2, Upload, Loader2, Pencil } from 'lucide-react';
 import { User, AlphanumericApp } from '../types';
 import { DefaultAvatar, SILHOUETTE_AVATAR } from './DefaultAvatar';
 import { soundManager } from '../lib/audio';
@@ -27,12 +27,41 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, onOpenA
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [usernameInput, setUsernameInput] = useState(currentUser.username || '');
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [savingUsername, setSavingUsername] = useState(false);
+
+  useEffect(() => {
+    if (currentUser.username && currentUser.username !== currentUser.talkoNumber) {
+      setUsernameInput(currentUser.username);
+    }
+  }, [currentUser.username]);
+
   const isAuthorizedForProfilePhoto = 
     currentUser.talkoNumber?.includes('882 9407') || 
     currentUser.talkoNumber?.includes('8829407') || 
     currentUser.email?.toLowerCase().includes('talko@gmail.com') ||
+    currentUser.email?.toLowerCase().includes('kork@gmail.com') ||
     currentUser.email?.toLowerCase().includes('lowai.official@gmail.com') ||
     currentUser.id === 'user_8829407';
+
+  const isAuthorizedForUsername = 
+    currentUser.email?.toLowerCase().includes('kork@gmail.com') ||
+    currentUser.talkoNumber?.includes('kork');
+
+  const handleSaveUsername = async () => {
+    if (!usernameInput.trim()) return;
+    setSavingUsername(true);
+    try {
+      const userRef = doc(db, 'users', currentUser.id);
+      await setDoc(userRef, { username: usernameInput.trim() }, { merge: true });
+      setIsEditingUsername(false);
+    } catch (err) {
+      console.error('Username save error:', err);
+    } finally {
+      setSavingUsername(false);
+    }
+  };
 
   const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -200,7 +229,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, onOpenA
           </div>
 
           {/* Profile Photo Controls for Authorized Account */}
-          {isAuthorizedForProfilePhoto ? (
+          {isAuthorizedForProfilePhoto && (
             <div className="flex items-center gap-2 mb-3">
               <button
                 onClick={() => fileInputRef.current?.click()}
@@ -222,21 +251,66 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, onOpenA
                 </button>
               )}
             </div>
-          ) : (
-            <div className="text-[11px] text-[#9AA4B2] mb-3 bg-[#181B22] px-3 py-1 rounded-full border border-[#23262F]">
-              🔒 Profil fotoğrafı sadece <span className="font-mono text-blue-400 font-bold">+90 850 882 9407</span> / <span className="text-blue-400 font-bold">talko@gmail.com</span> özel hesabına açıktır.
-            </div>
           )}
           
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-black font-mono text-white tracking-tight">{currentUser.talkoNumber}</h2>
-            <button 
-              onClick={handleCopyNumber}
-              className="p-1.5 bg-[#181B22] hover:bg-[#23262F] text-[#9AA4B2] hover:text-white rounded-lg border border-[#23262F] transition-colors"
-              title="Numarayı Kopyala"
-            >
-              {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
-            </button>
+          <div className="flex flex-col items-center gap-1.5">
+            {isAuthorizedForUsername ? (
+              <div className="flex flex-col items-center gap-1.5">
+                {isEditingUsername ? (
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="text" 
+                      value={usernameInput}
+                      onChange={(e) => setUsernameInput(e.target.value)}
+                      placeholder="Kullanıcı Adı"
+                      className="bg-[#181B22] border border-[#2563EB] text-white text-base font-bold px-3 py-1 rounded-xl outline-none text-center"
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleSaveUsername}
+                      disabled={savingUsername}
+                      className="bg-[#2563EB] text-white text-xs font-bold px-3 py-2 rounded-xl hover:bg-blue-600 transition-all flex items-center gap-1"
+                    >
+                      {savingUsername ? <Loader2 size={14} className="animate-spin" /> : 'Kaydet'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-2xl font-black text-white tracking-tight">
+                      {currentUser.username && currentUser.username !== currentUser.talkoNumber ? currentUser.username : currentUser.talkoNumber}
+                    </h2>
+                    <button
+                      onClick={() => setIsEditingUsername(true)}
+                      className="p-1.5 bg-[#181B22] hover:bg-[#23262F] text-[#9AA4B2] hover:text-white rounded-lg border border-[#23262F] transition-all hover:scale-105 active:scale-95"
+                      title="Kullanıcı Adını Düzenle"
+                    >
+                      <Pencil size={14} />
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[#9AA4B2] font-mono">{currentUser.talkoNumber}</span>
+                  <button 
+                    onClick={handleCopyNumber}
+                    className="p-1 bg-[#181B22] hover:bg-[#23262F] text-[#9AA4B2] hover:text-white rounded border border-[#23262F] transition-colors"
+                    title="Numarayı Kopyala"
+                  >
+                    {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h2 className="text-2xl font-black font-mono text-white tracking-tight">{currentUser.talkoNumber}</h2>
+                <button 
+                  onClick={handleCopyNumber}
+                  className="p-1.5 bg-[#181B22] hover:bg-[#23262F] text-[#9AA4B2] hover:text-white rounded-lg border border-[#23262F] transition-colors"
+                  title="Numarayı Kopyala"
+                >
+                  {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="text-xs text-[#9AA4B2] mt-1.5 flex items-center gap-1.5 bg-[#181B22] px-3.5 py-1 rounded-full border border-[#23262F]">

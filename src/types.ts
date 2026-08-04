@@ -132,6 +132,9 @@ export const getDisplayName = (user: Partial<User> | null | undefined): string =
   if (user.isSystemAccount || user.talkoNumber === 'TALKO') return 'TALKO';
   if (user.isAlphanumericSender && user.alphanumericName) return user.alphanumericName;
   if (user.isBusinessAccount && user.businessTitle) return user.businessTitle;
+  if (user.username && user.username.trim() !== '' && user.username !== user.talkoNumber && !user.username.startsWith('+90')) {
+    return user.username;
+  }
   return user.talkoNumber || user.username || 'Bilinmeyen Numara';
 };
 
