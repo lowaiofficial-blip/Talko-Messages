@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { X, Copy, Check, Share2 } from 'lucide-react';
-import { User } from '../types';
+import { User, getDisplayName } from '../types';
 import { DefaultAvatar } from './DefaultAvatar';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -46,12 +46,12 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({ user, isOpen, onClose 
               color={user.avatarColor}
               size="lg"
               avatarUrl={user.avatarUrl}
-              name={user.username}
+              name={getDisplayName(user)}
               className="border-2 border-[#2563EB]"
             />
           </div>
 
-          <h3 className="text-xl font-bold text-white tracking-tight">{user.username}</h3>
+          <h3 className="text-xl font-bold text-white tracking-tight">{getDisplayName(user)}</h3>
           <p className="text-xs text-[#9AA4B2] mt-0.5 mb-6 font-mono bg-[#0F1115] px-3 py-1 rounded-full border border-[#23262F]">
             {user.talkoNumber}
           </p>

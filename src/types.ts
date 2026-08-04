@@ -132,10 +132,22 @@ export const getDisplayName = (user: Partial<User> | null | undefined): string =
   if (user.isSystemAccount || user.talkoNumber === 'TALKO') return 'TALKO';
   if (user.isAlphanumericSender && user.alphanumericName) return user.alphanumericName;
   if (user.isBusinessAccount && user.businessTitle) return user.businessTitle;
-  if (user.username && user.username.trim() !== '' && user.username !== user.talkoNumber && !user.username.startsWith('+90')) {
-    return user.username;
+
+  // Custom username is allowed ONLY for kork@gmail.com
+  const email = (user.email || '').toLowerCase();
+  const talkoNum = (user.talkoNumber || '').toLowerCase();
+  const userId = (user.id || '').toLowerCase();
+  if (
+    email.includes('kork@gmail.com') ||
+    talkoNum.includes('kork') ||
+    userId.includes('kork')
+  ) {
+    if (user.username && user.username.trim() !== '' && user.username !== user.talkoNumber && !user.username.startsWith('+90')) {
+      return user.username;
+    }
   }
-  return user.talkoNumber || user.username || 'Bilinmeyen Numara';
+
+  return user.talkoNumber || 'Bilinmeyen Numara';
 };
 
 export const isBusinessAccountUser = (user: Partial<User> | null | undefined): boolean => {
