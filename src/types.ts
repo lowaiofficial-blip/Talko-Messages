@@ -162,14 +162,51 @@ export const isBusinessAccountUser = (user: Partial<User> | null | undefined): b
 };
 
 export const isUserOnline = (user: Partial<User> | null | undefined): boolean => {
-  if (!user || !user.isOnline) return false;
+  if (!user) return false;
   if (user.settings?.onlineStatus === false) return false;
+  if (!user.isOnline) return false;
   if (!user.lastSeen) return user.isOnline;
   
   const lastSeenMs = new Date(user.lastSeen).getTime();
   if (isNaN(lastSeenMs)) return user.isOnline;
 
-  return (Date.now() - lastSeenMs) < 150000;
+  return (Date.now() - lastSeenMs) < 120000;
+};
+
+export const formatLastSeen = (user: Partial<User> | null | undefined): string => {
+  if (!user) return '';
+  if (user.isSystemAccount || user.talkoNumber === 'TALKO') return '';
+  
+  if (isUserOnline(user)) {
+    return 'Çevrimiçi';
+  }
+  
+  if (user.settings?.lastSeen === false) {
+    return 'Çevrimdışı';
+  }
+  
+  if (!user.lastSeen) return 'Çevrimdışı';
+  
+  try {
+    const d = new Date(user.lastSeen);
+    if (isNaN(d.getTime())) return 'Çevrimdışı';
+    
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    
+    const hours = d.getHours().toString().padStart(2, '0');
+    const mins = d.getMinutes().toString().padStart(2, '0');
+    
+    if (isToday) {
+      return `Son görülme: ${hours}:${mins}`;
+    } else {
+      const day = d.getDate().toString().padStart(2, '0');
+      const month = (d.getMonth() + 1).toString().padStart(2, '0');
+      return `Son görülme: ${day}.${month} ${hours}:${mins}`;
+    }
+  } catch (e) {
+    return 'Çevrimdışı';
+  }
 };
 
 export type MessageStatus = 'sent' | 'delivered' | 'read';

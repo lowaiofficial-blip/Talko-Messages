@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Send, Image as ImageIcon, Check, CheckCheck, AlertTriangle, Ban, ShieldCheck, MoreVertical, CheckCircle2, Building2, Loader2 } from 'lucide-react';
-import { Conversation, Message, User, getDisplayName, isUserOnline, checkIsSpam, isBusinessAccountUser } from '../types';
+import { Conversation, Message, User, getDisplayName, isUserOnline, formatLastSeen, checkIsSpam, isBusinessAccountUser } from '../types';
 import { DefaultAvatar } from './DefaultAvatar';
 import { db } from '../lib/firebase';
 import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
@@ -341,7 +341,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
 
   const renderStatus = (msg: Message) => {
     if (msg.senderNumber !== currentUser.talkoNumber) return null;
-    if (otherUser.settings?.readReceipts === false) {
+    if (currentUser.settings?.readReceipts === false || otherUser.settings?.readReceipts === false) {
       if (msg.status === 'read' || msg.status === 'delivered') return <CheckCheck size={14} className="text-white/70" />;
       return <Check size={14} className="text-white/70" />;
     }
@@ -382,9 +382,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
                 ) : conversation.typingUsers?.includes(otherUser.talkoNumber) ? (
                   <span className="text-[#2563EB] font-bold animate-pulse">Yazıyor...</span>
                 ) : (
-                  isUserOnline(otherUser) 
-                    ? 'Çevrimiçi' 
-                    : (otherUser.settings?.lastSeen !== false && otherUser.lastSeen ? `Son görülme: ${format(new Date(otherUser.lastSeen), 'HH:mm')}` : '')
+                  formatLastSeen(otherUser)
                 )}
               </p>
             </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
 import { db, auth } from '../lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, doc, getDoc, setDoc, getDocs } from 'firebase/firestore';
-import { Conversation, Message, User, AvatarColor, getDisplayName, isUserOnline, checkIsSpam, isBusinessAccountUser } from '../types';
+import { Conversation, Message, User, AvatarColor, getDisplayName, isUserOnline, formatLastSeen, checkIsSpam, isBusinessAccountUser } from '../types';
 import { Header } from './Header';
 import { ChatList } from './ChatList';
 import { ChatView } from './ChatView';
@@ -280,36 +280,36 @@ export const MainApp: React.FC = () => {
 
   // Presence management
   useEffect(() => {
-    if (!talkoUser) return;
+    if (!talkoUser?.id) return;
     
     const userRef = doc(db, 'users', talkoUser.id);
-    const shouldBeOnline = talkoUser.settings?.onlineStatus !== false;
 
     const setPresenceState = (online: boolean) => {
-      if (!auth.currentUser) return;
+      if (!talkoUser?.id) return;
+      const effectiveOnline = online && (talkoUser.settings?.onlineStatus !== false);
       setDoc(userRef, { 
-        isOnline: online, 
+        isOnline: effectiveOnline, 
         lastSeen: new Date().toISOString() 
       }, { merge: true }).catch(() => {});
     };
     
-    setPresenceState(shouldBeOnline);
+    setPresenceState(true);
     
     const heartbeatInterval = setInterval(() => {
-      if (document.visibilityState === 'visible' && shouldBeOnline) {
+      if (document.visibilityState === 'visible') {
         setPresenceState(true);
       }
-    }, 45000);
+    }, 25000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         setPresenceState(false);
       } else {
-        setPresenceState(shouldBeOnline);
+        setPresenceState(true);
       }
     };
 
-    const handleOnline = () => setPresenceState(shouldBeOnline);
+    const handleOnline = () => setPresenceState(true);
     const handleOffline = () => setPresenceState(false);
     
     const handleUnload = () => {
@@ -329,7 +329,6 @@ export const MainApp: React.FC = () => {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeunload', handleUnload);
       window.removeEventListener('pagehide', handleUnload);
-      setPresenceState(false);
     };
   }, [talkoUser?.id, talkoUser?.settings?.onlineStatus]);
 
@@ -887,7 +886,7 @@ export const MainApp: React.FC = () => {
                     ) : (
                       <div className="text-xs text-[#9AA4B2] flex items-center gap-1.5 justify-center">
                         <span className={`w-2 h-2 rounded-full ${isUserOnline(other) ? 'bg-green-500' : 'bg-gray-500'}`}></span>
-                        <span>{isUserOnline(other) ? 'Çevrimiçi' : 'Çevrimdışı'}</span>
+                        <span>{formatLastSeen(other)}</span>
                       </div>
                     )}
                   </div>

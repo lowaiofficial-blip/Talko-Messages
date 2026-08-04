@@ -37,6 +37,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, onOpenA
     }
   }, [currentUser.username]);
 
+  useEffect(() => {
+    if (currentUser.settings) {
+      if (currentUser.settings.soundEnabled !== undefined) setSoundEnabled(currentUser.settings.soundEnabled);
+      if (currentUser.settings.readReceipts !== undefined) setReadReceipts(currentUser.settings.readReceipts);
+      if (currentUser.settings.lastSeen !== undefined) setLastSeen(currentUser.settings.lastSeen);
+      if (currentUser.settings.onlineStatus !== undefined) setOnlineStatus(currentUser.settings.onlineStatus);
+    }
+  }, [currentUser.settings]);
+
   const isAuthorizedForProfilePhoto = 
     currentUser.talkoNumber?.includes('882 9407') || 
     currentUser.talkoNumber?.includes('8829407') || 
@@ -113,8 +122,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, onOpenA
 
   const updateSetting = async (key: string, value: boolean) => {
     const userRef = doc(db, 'users', currentUser.id);
+    const existingSettings = currentUser.settings || {};
     await setDoc(userRef, {
       settings: {
+        ...existingSettings,
         [key]: value
       }
     }, { merge: true });
@@ -143,10 +154,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, onOpenA
     const next = !onlineStatus;
     setOnlineStatus(next);
     const userRef = doc(db, 'users', currentUser.id);
+    const existingSettings = currentUser.settings || {};
     setDoc(userRef, {
       isOnline: next,
       lastSeen: new Date().toISOString(),
       settings: {
+        ...existingSettings,
         onlineStatus: next
       }
     }, { merge: true });

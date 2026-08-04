@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Conversation, getDisplayName, isUserOnline, isBusinessAccountUser } from '../types';
+import { User, Conversation, getDisplayName, isUserOnline, formatLastSeen, isBusinessAccountUser } from '../types';
 import { DefaultAvatar } from './DefaultAvatar';
 import { X, MessageSquare, QrCode, Ban, AlertOctagon, ShieldCheck } from 'lucide-react';
 import { db } from '../lib/firebase';
@@ -116,7 +116,7 @@ export const ProfileCardModal: React.FC<ProfileCardModalProps> = ({
               ) : (
                 <>
                   <span className={`w-2 h-2 rounded-full ${isUserOnline(user) ? 'bg-green-500' : 'bg-gray-500'}`}></span>
-                  <span>{isUserOnline(user) ? 'Çevrimiçi' : 'Çevrimdışı'}</span>
+                  <span>{formatLastSeen(user)}</span>
                 </>
               )}
             </div>
