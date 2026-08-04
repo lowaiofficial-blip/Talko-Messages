@@ -11,7 +11,25 @@ interface DefaultAvatarProps {
   isAlphanumeric?: boolean;
   isSpam?: boolean;
   isBlocked?: boolean;
+  talkoNumber?: string;
 }
+
+export const SILHOUETTE_AVATAR = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgNDAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgZmlsbD0iI2MzY2RkNSIvPjxjaXJjbGUgY3g9IjIwMCIgY3k9IjE0OCIgcj0iNzIiIGZpbGw9IiNmZmZmZmYiLz48cGF0aCBmaWxsPSIjZmZmZmZmIiBkPSJNMjAwIDI4MEMyNjAgMjM0IDMyMCAyNjUgMzQyIDM0NUMzNDUgMzYwIDM0NSA0MDAgMzQ1IDQwMEw1NSA0MDBDNTUgNDAwIDU1IDM2MCA1OCAzNDVDODAgMjY1IDE0MCAyMzAgMjAwIDI4MFoiLz48L3N2Zz4=";
+
+export const SilhouetteAvatarSVG: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <svg 
+    className={`w-full h-full object-cover ${className}`} 
+    viewBox="0 0 400 400" 
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <rect width="400" height="400" fill="#c3cdd5" />
+    <circle cx="200" cy="148" r="72" fill="#ffffff" />
+    <path 
+      fill="#ffffff" 
+      d="M 200 230 C 260 230 320 265 342 345 C 345 360 345 400 345 400 L 55 400 C 55 400 55 360 58 345 C 80 265 140 230 200 230 Z" 
+    />
+  </svg>
+);
 
 const colorMap: Record<string, { bg: string; circle: string }> = {
   blue: { bg: '#2563EB', circle: '#3B82F6' },
@@ -30,9 +48,18 @@ export const DefaultAvatar: React.FC<DefaultAvatarProps> = ({
   className = '',
   isAlphanumeric = false,
   isSpam = false,
-  isBlocked = false
+  isBlocked = false,
+  talkoNumber
 }) => {
   const [imgError, setImgError] = React.useState(false);
+
+  const isSilhouette = 
+    talkoNumber?.includes('882 9407') || 
+    talkoNumber?.includes('8829407') || 
+    name?.includes('882 9407') || 
+    name?.includes('8829407') ||
+    avatarUrl === SILHOUETTE_AVATAR ||
+    avatarUrl?.includes('data:image/svg+xml');
 
   const sizeClasses = {
     sm: 'w-10 h-10',
@@ -78,7 +105,16 @@ export const DefaultAvatar: React.FC<DefaultAvatarProps> = ({
     );
   }
 
-  // 3. NORMAL AVATAR PROFILE
+  // 3. SILHOUETTE AVATAR PROFILE (Grauer Hintergrund + Weiße Silhouette)
+  if (isSilhouette) {
+    return (
+      <div className={`${sizeClasses[size]} ${roundedClass} shadow-md overflow-hidden shrink-0 ${className}`}>
+        <SilhouetteAvatarSVG />
+      </div>
+    );
+  }
+
+  // 4. CUSTOM IMAGE AVATAR PROFILE
   if (avatarUrl && !imgError) {
     return (
       <img 

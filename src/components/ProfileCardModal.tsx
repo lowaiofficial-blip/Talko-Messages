@@ -94,6 +94,7 @@ export const ProfileCardModal: React.FC<ProfileCardModalProps> = ({
                 size="xl"
                 avatarUrl={user.avatarUrl}
                 name={displayName}
+                talkoNumber={user.talkoNumber}
                 className="border-4 border-[#181B22] shadow-lg"
                 isAlphanumeric={user.isAlphanumericSender}
               />

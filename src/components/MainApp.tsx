@@ -14,9 +14,12 @@ import { ProfileCardModal } from './ProfileCardModal';
 import { QRCodeModal } from './QRCodeModal';
 import { AlphanumericModal } from './AlphanumericModal';
 import { SecurityVerificationModal } from './SecurityVerificationModal';
+import { MetaBanScreen } from './MetaBanScreen';
 import { soundManager } from '../lib/audio';
 import { MessageSquare, QrCode, ShieldCheck, User as UserIcon, Settings, Building2, Lock } from 'lucide-react';
 import { DefaultAvatar } from './DefaultAvatar';
+import { getBrowserFingerprint } from '../lib/fingerprint';
+import { seedDefaultUsers } from '../lib/seedUsers';
 
 export const MainApp: React.FC = () => {
   const { talkoUser } = useAuth();
@@ -49,6 +52,13 @@ export const MainApp: React.FC = () => {
       window.removeEventListener('open-security-verification', handleOpenSecurity);
     };
   }, []);
+
+  // Auto-enforce is_locked state
+  useEffect(() => {
+    if (talkoUser?.is_locked) {
+      setIsSecurityModalOpen(true);
+    }
+  }, [talkoUser?.is_locked]);
 
   const handleOpenQR = (u: User) => {
     setQrTargetUser(u);
@@ -222,11 +232,12 @@ export const MainApp: React.FC = () => {
     return () => window.removeEventListener('focus', migrateAndCheckTalko);
   }, [talkoUser?.id]);
 
-  // Load TALKO system account safely
+  // Load TALKO system account & seed default users safely
   useEffect(() => {
     const initTalkoSystem = async () => {
       if (!auth.currentUser) return;
       try {
+        await seedDefaultUsers();
         const talkoRef = doc(db, 'users', 'system_talko');
         const talkoSnap = await getDoc(talkoRef);
         if (!talkoSnap.exists()) {
@@ -571,6 +582,18 @@ export const MainApp: React.FC = () => {
   }, [talkoUser]);
 
   if (!talkoUser) return null;
+
+  // Permanent Meta Ban Screen enforcement
+  const currentFingerprint = getBrowserFingerprint();
+  const isBannedByFingerprint = localStorage.getItem('talko_banned_fingerprint') === currentFingerprint;
+  if (talkoUser.isBanned || isBannedByFingerprint) {
+    return (
+      <MetaBanScreen 
+        reason={talkoUser.banReason || 'Groq AI Moderasyon Taramasında Ağır İhlal Tespiti Edildi.'}
+        fingerprint={talkoUser.browserFingerprint || currentFingerprint}
+      />
+    );
+  }
 
   // Render Admin View
   if (isAdminView) {
@@ -937,9 +960,13 @@ export const MainApp: React.FC = () => {
       />
       
       <SecurityVerificationModal
-        isOpen={isSecurityModalOpen}
+        isOpen={isSecurityModalOpen || Boolean(talkoUser?.is_locked)}
         onClose={() => setIsSecurityModalOpen(false)}
         currentUser={talkoUser}
+        onUnlocked={() => {
+          localStorage.removeItem('talko_locked_fingerprint');
+          setIsSecurityModalOpen(false);
+        }}
       />
     </div>
   );

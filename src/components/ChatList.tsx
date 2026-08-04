@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Conversation, User, getDisplayName, isUserOnline, checkIsSpam, isBusinessAccountUser } from '../types';
 import { DefaultAvatar } from './DefaultAvatar';
 import { db } from '../lib/firebase';
-import { collection, query, where, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
-import { Search, MessageSquare, Building2, AlertTriangle, Ban } from 'lucide-react';
+import { collection, query, where, getDocs, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { Search, MessageSquare, Building2, AlertTriangle, Ban, Users, UserPlus } from 'lucide-react';
 
 interface ChatListProps {
   conversations: Conversation[];
@@ -28,47 +28,35 @@ export const ChatList: React.FC<ChatListProps> = ({
   onSelectConversation
 }) => {
   const [activeFolder, setActiveFolder] = useState<'personal' | 'corporate' | 'spam' | 'blocked'>('personal');
-  const [globalSearchResult, setGlobalSearchResult] = useState<User | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
+  const [allRegisteredUsers, setAllRegisteredUsers] = useState<User[]>([]);
+  const [showDirectory, setShowDirectory] = useState(false);
 
   const isBusinessUser = isBusinessAccountUser(currentUser);
 
+  // Subscribe to all registered users in Firestore
   useEffect(() => {
-    if (!searchQuery.trim() || isBusinessUser) {
-      setGlobalSearchResult(null);
-      return;
-    }
-
-    const searchNum = formatSearchNumber(searchQuery);
-    
-    const delayDebounce = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const q = query(collection(db, 'users'), where('talkoNumber', '==', searchNum));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const foundUser = { id: snap.docs[0].id, ...snap.docs[0].data() } as User;
-          if (
-            foundUser.talkoNumber !== currentUser.talkoNumber &&
-            !foundUser.isBusinessAccount &&
-            !foundUser.isAlphanumericSender
-          ) {
-            setGlobalSearchResult(foundUser);
-          } else {
-            setGlobalSearchResult(null);
-          }
-        } else {
-          setGlobalSearchResult(null);
+    const q = query(collection(db, 'users'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const usersList: User[] = [];
+      snapshot.forEach(docSnap => {
+        const u = { id: docSnap.id, ...docSnap.data() } as User;
+        if (
+          u.talkoNumber !== currentUser.talkoNumber &&
+          !u.isSystemAccount &&
+          u.talkoNumber !== 'TALKO' &&
+          !u.isBanned
+        ) {
+          usersList.push(u);
         }
-      } catch (err) {
-        console.error("Search error", err);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 500);
-
-    return () => clearTimeout(delayDebounce);
-  }, [searchQuery, currentUser.talkoNumber]);
+      });
+      // Sort users by Talko number
+      usersList.sort((a, b) => a.talkoNumber.localeCompare(b.talkoNumber));
+      setAllRegisteredUsers(usersList);
+    }, (err) => {
+      console.error("Users listener error:", err);
+    });
+    return () => unsubscribe();
+  }, [currentUser.talkoNumber]);
 
   const handleStartGlobalChat = async (user: User) => {
     if (isBusinessUser) return;
@@ -181,6 +169,20 @@ export const ChatList: React.FC<ChatListProps> = ({
     return false;
   });
 
+  // Filter registered users for search/directory
+  const searchClean = searchQuery.replace(/\D/g, '');
+  const searchFormatted = formatSearchNumber(searchQuery);
+
+  const matchedRegisteredUsers = allRegisteredUsers.filter(u => {
+    if (!searchQuery.trim()) return true;
+    const qStr = searchQuery.toLowerCase();
+    const nameMatch = (u.username || '').toLowerCase().includes(qStr);
+    const numMatch = u.talkoNumber.toLowerCase().includes(qStr);
+    const numCleanMatch = searchClean ? u.talkoNumber.replace(/\D/g, '').includes(searchClean) : false;
+    const exactMatch = u.talkoNumber === searchFormatted;
+    return nameMatch || numMatch || numCleanMatch || exactMatch;
+  });
+
   return (
     <div className="flex flex-col p-2 space-y-2">
 
@@ -260,38 +262,98 @@ export const ChatList: React.FC<ChatListProps> = ({
             </span>
           )}
         </button>
+
+        {/* 👥 All Registered Numbers Quick Toggle Button */}
+        <button
+          onClick={() => setShowDirectory(!showDirectory)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-xs transition-all shrink-0 ${showDirectory ? 'bg-[#2563EB] text-white shadow-lg shadow-blue-500/20' : 'bg-[#181B22] text-[#9AA4B2] hover:bg-[#23262F] hover:text-white border border-[#23262F]'}`}
+          title="Tüm Kayıtlı Numaraları Sırala"
+        >
+          <Users size={13} />
+          <span>Tüm Numaralar</span>
+          <span className="ml-0.5 px-1.5 py-0.2 bg-blue-500/30 text-blue-300 font-mono text-[10px] rounded-full">
+            {allRegisteredUsers.length}
+          </span>
+        </button>
       </div>
 
-      {searchQuery.trim() && (
-        <div className="px-3 pb-2 mb-2 border-b border-[#23262F]">
-          <h4 className="text-xs font-bold text-[#9AA4B2] uppercase tracking-wider mb-2">Genel Arama Sonuçları</h4>
-          
-          {isSearching ? (
-            <div className="p-3 text-center text-xs text-[#9AA4B2]">Aranıyor...</div>
-          ) : globalSearchResult ? (
-            <div 
-              onClick={() => handleStartGlobalChat(globalSearchResult)}
-              className="flex items-center gap-4 p-3 rounded-2xl bg-[#2563EB]/10 border border-[#2563EB]/20 hover:bg-[#2563EB]/20 transition-all cursor-pointer"
-            >
-              <DefaultAvatar 
-                color={globalSearchResult.avatarColor}
-                size="md"
-                avatarUrl={globalSearchResult.avatarUrl}
-                name={getDisplayName(globalSearchResult)}
-                isAlphanumeric={globalSearchResult.isAlphanumericSender}
-              />
-              <div className="flex-1 min-w-0">
-                <h3 className={`font-bold text-[14px] text-white ${!globalSearchResult.isAlphanumericSender ? 'font-mono' : ''}`}>
-                  {getDisplayName(globalSearchResult)}
-                </h3>
-                <p className="text-xs font-mono text-[#2563EB] mt-0.5">{globalSearchResult.talkoNumber}</p>
-              </div>
-              <div className="px-3 py-1.5 bg-[#2563EB] text-white text-[10px] font-bold rounded-xl shadow-lg shadow-blue-500/20">
-                Sohbet Başlat
-              </div>
+      {/* 🔍 Registered Numbers & Search Directory */}
+      {(searchQuery.trim() || showDirectory) && (
+        <div className="px-3 py-3 mb-2 bg-[#181B22]/90 rounded-2xl border border-[#23262F] shadow-xl">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Users size={15} className="text-[#2563EB]" />
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                Sıralı Kayıtlı Numaralar ({matchedRegisteredUsers.length})
+              </h4>
+            </div>
+            {!searchQuery.trim() && (
+              <button 
+                onClick={() => setShowDirectory(false)}
+                className="text-[11px] text-[#9AA4B2] hover:text-white px-2 py-0.5 rounded-lg bg-[#23262F] font-semibold"
+              >
+                Kapat
+              </button>
+            )}
+          </div>
+
+          {matchedRegisteredUsers.length === 0 ? (
+            <div className="p-4 text-center text-xs text-[#9AA4B2] font-medium">
+              Aramayla eşleşen kayıtlı numara veya kişi bulunamadı.
             </div>
           ) : (
-            <div className="p-3 text-center text-xs text-[#9AA4B2]">Numarayla eşleşen kullanıcı bulunamadı. (Örn: 850 123 4567)</div>
+            <div className="space-y-2 max-h-72 overflow-y-auto no-scrollbar pr-1">
+              {matchedRegisteredUsers.map(u => {
+                const online = isUserOnline(u);
+                return (
+                  <div 
+                    key={u.id || u.talkoNumber}
+                    onClick={() => handleStartGlobalChat(u)}
+                    className="flex items-center gap-3 p-2.5 rounded-xl bg-[#0F1115] border border-[#23262F] hover:border-[#2563EB]/50 hover:bg-[#2563EB]/10 transition-all cursor-pointer group"
+                  >
+                    <div className="relative">
+                      <DefaultAvatar 
+                        color={u.avatarColor}
+                        size="md"
+                        avatarUrl={u.avatarUrl}
+                        name={getDisplayName(u)}
+                        talkoNumber={u.talkoNumber}
+                        isAlphanumeric={u.isAlphanumericSender || u.isBusinessAccount}
+                      />
+                      {online && (
+                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-[#0F1115] rounded-full"></span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-xs text-white truncate">
+                          {getDisplayName(u)}
+                        </h3>
+                        {online && (
+                          <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-400 font-semibold rounded-full">
+                            çevrimiçi
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] font-mono text-[#2563EB] mt-0.5 font-bold">
+                        {u.talkoNumber}
+                      </p>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartGlobalChat(u);
+                      }}
+                      className="px-3 py-1.5 bg-[#2563EB] hover:bg-blue-600 text-white text-[10px] font-bold rounded-xl shadow-md shadow-blue-500/20 flex items-center gap-1 shrink-0 transition-all"
+                    >
+                      <UserPlus size={12} />
+                      <span>Sohbet Et</span>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
@@ -327,53 +389,41 @@ export const ChatList: React.FC<ChatListProps> = ({
                   size="lg"
                   avatarUrl={otherUser.avatarUrl}
                   name={displayName}
+                  talkoNumber={otherUser.talkoNumber}
                   isAlphanumeric={otherUser.isAlphanumericSender || otherUser.isBusinessAccount}
-                  isSpam={activeFolder === 'spam' || isSpam(conv)}
-                  isBlocked={activeFolder === 'blocked' || isBlocked(conv)}
                 />
-                {isUserOnline(otherUser) && !isSystem && (
-                  <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-[#181B22]"></div>
+                {!isSystem && isUserOnline(otherUser) && (
+                  <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-[#181B22] rounded-full"></span>
                 )}
               </div>
 
-              <div className="flex-1 min-w-0 flex flex-col justify-center">
-                <div className="flex justify-between items-baseline mb-0.5">
-                  <h3 className={`font-bold text-[15px] truncate ${!otherUser.isAlphanumericSender && !isSystem && !otherUser.isBusinessAccount ? 'font-mono' : ''} ${hasUnread ? 'text-white' : 'text-gray-100'}`}>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className={`font-bold text-sm text-white truncate group-hover:text-blue-400 transition-colors ${!otherUser.isAlphanumericSender && !otherUser.isBusinessAccount ? 'font-mono' : ''}`}>
                     {displayName}
                   </h3>
-                  <span className={`text-xs ml-2 shrink-0 ${hasUnread ? 'text-red-500 font-bold' : 'text-[#9AA4B2]'}`}>
-                    {conv.lastMessage ? new Date(conv.lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                  </span>
-                </div>
-                
-                {/* Status or Alphanumeric Tag */}
-                {(otherUser.isAlphanumericSender || otherUser.isBusinessAccount) && (
-                  <div className="text-[10px] font-bold text-[#2563EB] uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <Building2 size={10} /> Kurumsal Gönderici
-                  </div>
-                )}
-
-                {activeFolder === 'spam' && (
-                  <div className="text-[10px] font-bold text-yellow-500 uppercase tracking-wider mb-1 flex items-center gap-1">
-                    <AlertTriangle size={10} /> Spam İletisi
-                  </div>
-                )}
-                
-                <div className="flex justify-between items-center gap-2">
-                  {isTyping ? (
-                    <p className="text-sm text-[#2563EB] font-semibold animate-pulse truncate">
-                      Yazıyor...
-                    </p>
-                  ) : (
-                    <p className={`text-sm truncate ${hasUnread ? 'text-white font-medium' : (isSystem ? 'text-[#2563EB] font-medium' : 'text-[#9AA4B2]')}`}>
-                      {conv.lastMessage?.content ? conv.lastMessage.content.replace(/\n/g, ' ') : (isSystem ? 'Sistem Mesajı' : 'Sohbete başla...')}
-                    </p>
+                  {conv.lastMessage && (
+                    <span className="text-[10px] text-[#9AA4B2] font-mono shrink-0">
+                      {new Date(conv.lastMessage.timestamp).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   )}
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-[#9AA4B2] truncate leading-tight">
+                    {isTyping ? (
+                      <span className="text-blue-400 font-semibold animate-pulse">yazıyor...</span>
+                    ) : conv.lastMessage ? (
+                      conv.lastMessage.content
+                    ) : (
+                      <span className="italic opacity-60">Sohbet başlatıldı</span>
+                    )}
+                  </p>
 
                   {hasUnread && (
-                    <div className="min-w-[22px] h-[22px] px-1.5 bg-red-500 text-white text-[11px] font-black flex items-center justify-center rounded-full shrink-0 shadow-md shadow-red-500/40 animate-pulse">
-                      {unreadCount > 99 ? '99+' : unreadCount}
-                    </div>
+                    <span className="min-w-[20px] h-5 px-1.5 bg-blue-600 text-white text-[10px] font-black rounded-full flex items-center justify-center shrink-0 shadow-md shadow-blue-500/30">
+                      {unreadCount}
+                    </span>
                   )}
                 </div>
               </div>
@@ -384,4 +434,3 @@ export const ChatList: React.FC<ChatListProps> = ({
     </div>
   );
 };
-

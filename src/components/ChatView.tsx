@@ -6,6 +6,8 @@ import { db } from '../lib/firebase';
 import { collection, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { soundManager } from '../lib/audio';
 import { format } from 'date-fns';
+import { getBrowserFingerprint } from '../lib/fingerprint';
+import { evaluateLocalSafetyRules } from '../lib/groqModeration';
 
 interface ChatViewProps {
   conversation: Conversation;
@@ -137,6 +139,57 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
     
     const content = inputText.trim();
     setInputText('');
+
+    // --- Groq AI Safety & Moderation Check ---
+    const fingerprint = getBrowserFingerprint();
+    const historyContext = messages.slice(-10).map(m => ({
+      senderName: m.senderName,
+      content: m.content
+    }));
+
+    let decision: '[TEMIZ]' | '[YUZ_DOGRULAMA]' | '[KALICI_BAN]' = '[TEMIZ]';
+
+    try {
+      const res = await fetch('/api/moderate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          senderNumber: currentUser.talkoNumber,
+          conversationHistory: historyContext,
+          browserFingerprint: fingerprint
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        decision = data.decision || '[TEMIZ]';
+      } else {
+        decision = evaluateLocalSafetyRules(content);
+      }
+    } catch {
+      decision = evaluateLocalSafetyRules(content);
+    }
+
+    if (decision === '[KALICI_BAN]') {
+      localStorage.setItem('talko_banned_fingerprint', fingerprint);
+      await setDoc(doc(db, 'users', currentUser.id), {
+        isBanned: true,
+        banReason: 'Groq AI Security Moderation [KALICI_BAN]: +18 / Taciz / Ağır İhlal',
+        browserFingerprint: fingerprint
+      }, { merge: true });
+      return;
+    }
+
+    if (decision === '[YUZ_DOGRULAMA]') {
+      localStorage.setItem('talko_locked_fingerprint', fingerprint);
+      await setDoc(doc(db, 'users', currentUser.id), {
+        is_locked: true,
+        browserFingerprint: fingerprint
+      }, { merge: true });
+      window.dispatchEvent(new CustomEvent('open-security-verification'));
+      return;
+    }
 
     if (soundManager.isSoundEnabled()) {
       soundManager.playSendSound();
@@ -314,6 +367,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ conversation, messages, curr
               size="sm"
               avatarUrl={otherUser.avatarUrl}
               name={otherDisplayName}
+              talkoNumber={otherUser.talkoNumber}
               isAlphanumeric={otherUser.isAlphanumericSender || otherUser.isBusinessAccount}
               isSpam={isSpam}
               isBlocked={isBlocked}

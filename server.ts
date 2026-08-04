@@ -38,8 +38,20 @@ const talkoSystemUser: User = {
 };
 
 // Demo Users
+const SILHOUETTE_AVATAR = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgNDAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgZmlsbD0iI2MzY2RkNSIvPjxjaXJjbGUgY3g9IjIwMCIgY3k9IjE0OCIgcj0iNzIiIGZpbGw9IiNmZmZmZmYiLz48cGF0aCBmaWxsPSIjZmZmZmZmIiBkPSJNMjAwIDI4MEMyNjAgMjM0IDMyMCAyNjUgMzQyIDM0NUMzNDUgMzYwIDM0NSA0MDAgMzQ1IDQwMEw1NSA0MDBDNTUgNDAwIDU1IDM2MCA1OCAzNDVDODAgMjY1IDE0MCAyMzAgMjAwIDI4MFoiLz48L3N2Zz4=";
+
 let users: User[] = [
   talkoSystemUser,
+  {
+    id: 'user_8829407',
+    talkoNumber: '+90 850 882 9407',
+    username: 'Talko Kullanıcısı',
+    avatarUrl: SILHOUETTE_AVATAR,
+    avatarColor: 'blue',
+    isOnline: true,
+    lastSeen: new Date().toISOString(),
+    isBanned: false,
+  },
   {
     id: 'user-001',
     talkoNumber: '+90 850 100 4821',
@@ -539,6 +551,132 @@ app.post('/api/messages', (req: Request, res: Response) => {
   }
 
   res.json({ success: true, message: newMsg });
+});
+
+// Groq Moderation System Endpoint
+const TALKO_GROQ_SYSTEM_PROMPT = `🚨 [TALKO MESSAGES - SYSTEM INTEGRITY PROMPT] 🚨
+🤖 Rolün: Talko Messages platformunun baş güvenlik ve moderasyon yapay zekasısın. Görevin; kız kullanıcıları korumak, trolleri imha etmek ve platformun güvenliğini sağlamaktır.
+⚠️ KESİNLİKLE YASAKLI DURUMLAR:
+1️⃣ [+18 / CİNSELLİK]: Mesajda müstehcen kelimeler, cinsel imalar, çıplaklık veya +18 fotoğraf/video talepleri (+18 foto atsana, seksi vb.).
+2️⃣ [TACİZ / SİNSİ TROLLÜK]: Karşı tarafı rahatsız eden, ısrarcı sevgili olma çabaları, flörtöz darlıklar veya kullanıcıları manipüle eden troll hareketleri.
+3️⃣ [SPAM / TEKRAR]: Hızlı ve anlamsız mesajlar göndermek veya kopyala-yapıştır taktikleri yapmak.
+🎯 DEĞERLENDİRME VE KARAR PROTOKOLÜ:
+Sana gelen kullanıcı mesajını ve geçmişini çok sıkı bir siber dedektif gibi incele. Kullanıcı doğrudan küfür etmese bile, üstü kapalı veya imalı tacizleri/trolleri mutlaka sezinle.
+🛑 ÖNEMLİ KURAL: Kullanıcıya hiçbir açıklama, cümle veya nezaket metni YAZMA. Sadece ve sadece aşağıdaki üç komuttan durumuna uygun olan tek bir kelimeyi büyük harflerle ve köşeli parantez içinde yanıtla:
+❌ Ağır ihlal veya net +18/taciz durumu varsa sadece: [KALICI_BAN]
+📸 Şüpheli bir trollük, çapkınlık veya darlık sezdiysen sadece: [YUZ_DOGRULAMA]
+✅ Mesaj tamamen temiz, kurallara uygun ve normal ise sadece: [TEMIZ]`;
+
+function localSafetyCheck(content: string): '[TEMIZ]' | '[YUZ_DOGRULAMA]' | '[KALICI_BAN]' {
+  if (!content) return '[TEMIZ]';
+  const lower = content.toLowerCase();
+  const severe = ['+18', 'cinsellik', 'müstehcen', 'seksi', 'am', 'sik', 'yarrak', 'orospu', 'fahişe', 'memelerini', 'soyun', 'çıplak foto', 'seks yapalım', 'foto atsana', 'bacaklarını', 'sikiş'];
+  if (severe.some(p => lower.includes(p))) return '[KALICI_BAN]';
+
+  const suspicious = ['sevgili olalım', 'benimle çıkar mısın', 'evde tekim', 'numaranı versene', 'güzellik', 'nude', 'özelden yaz', 'insta ver', 'snapchat', 'troll', 'sana taktım', 'kız mısın', 'görüşelim mi', 'yalnız mısın'];
+  if (suspicious.some(p => lower.includes(p))) return '[YUZ_DOGRULAMA]';
+
+  return '[TEMIZ]';
+}
+
+app.post('/api/moderate', async (req: Request, res: Response) => {
+  const { content, conversationHistory, senderNumber, isBot, browserFingerprint } = req.body;
+
+  // Rate Limiting protection for Bots: Random sleep 5-15s
+  if (isBot) {
+    const sleepMs = Math.floor(Math.random() * 10000) + 5000;
+    await new Promise(resolve => setTimeout(resolve, sleepMs));
+  }
+
+  const apiKey = process.env.GROQ_API_KEY;
+  let decision: '[TEMIZ]' | '[YUZ_DOGRULAMA]' | '[KALICI_BAN]' = '[TEMIZ]';
+
+  // Format last 5-10 context messages for Groq LLM
+  let contextText = '';
+  if (Array.isArray(conversationHistory) && conversationHistory.length > 0) {
+    const recent = conversationHistory.slice(-10);
+    contextText = 'Sohbet Geçmişi (Son Mesajlar):\n' + 
+      recent.map((m: any) => `${m.senderName || 'Kullanıcı'}: ${m.content}`).join('\n') + '\n\n';
+  }
+
+  const userPrompt = `${contextText}Değerlendirilecek Son Mesaj: "${content || ''}"`;
+
+  if (apiKey) {
+    const modelsToTry = ['llama-3.3-70b-specdec', 'llama-3.3-70b-versatile', 'llama3-70b-8192'];
+    let groqSuccess = false;
+
+    for (const modelName of modelsToTry) {
+      try {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: modelName,
+            messages: [
+              { role: 'system', content: TALKO_GROQ_SYSTEM_PROMPT },
+              { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.1,
+            max_tokens: 20
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const reply = data?.choices?.[0]?.message?.content?.trim() || '';
+          if (reply.includes('[KALICI_BAN]')) {
+            decision = '[KALICI_BAN]';
+          } else if (reply.includes('[YUZ_DOGRULAMA]')) {
+            decision = '[YUZ_DOGRULAMA]';
+          } else if (reply.includes('[TEMIZ]')) {
+            decision = '[TEMIZ]';
+          } else {
+            decision = localSafetyCheck(content);
+          }
+          groqSuccess = true;
+          break;
+        }
+      } catch (err) {
+        console.error(`Groq API error on model ${modelName}:`, err);
+      }
+    }
+
+    if (!groqSuccess) {
+      decision = localSafetyCheck(content);
+    }
+  } else {
+    // Fallback if no GROQ_API_KEY is configured
+    decision = localSafetyCheck(content);
+  }
+
+  // Execute backend enforcement actions
+  if (senderNumber) {
+    const user = users.find(u => u.talkoNumber.replace(/\s+/g, '') === senderNumber.replace(/\s+/g, ''));
+    if (user) {
+      if (browserFingerprint) {
+        user.browserFingerprint = browserFingerprint;
+      }
+
+      if (decision === '[YUZ_DOGRULAMA]') {
+        user.is_locked = true;
+        broadcastSSE('user_updated', user);
+      } else if (decision === '[KALICI_BAN]') {
+        user.isBanned = true;
+        user.banReason = 'Talko AI Moderation [KALICI_BAN]: +18 / Taciz / Ağır Ihlal';
+        user.isOnline = false;
+        broadcastSSE('user_updated', user);
+      }
+    }
+  }
+
+  res.json({
+    decision,
+    isBlocked: decision !== '[TEMIZ]',
+    reason: decision === '[KALICI_BAN]' ? 'Ağır ihlal nedeniyle hesabınız kalıcı engellendi.' : decision === '[YUZ_DOGRULAMA]' ? 'Şüpheli hareket sezildi. Yüz doğrulaması gerekiyor.' : undefined
+  });
 });
 
 // Update Typing status

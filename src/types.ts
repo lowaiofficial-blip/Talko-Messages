@@ -12,6 +12,8 @@ export interface User {
   lastSeen: string; // ISO string
   isBanned: boolean;
   banReason?: string;
+  is_locked?: boolean;
+  browserFingerprint?: string;
   isSystemAccount?: boolean; // For TALKO system account
   isAlphanumericSender?: boolean; // For approved companies like TRENDYOL, ZIRAAT
   alphanumericName?: string; // Max 11 chars

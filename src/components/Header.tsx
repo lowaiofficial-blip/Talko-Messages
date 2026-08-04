@@ -49,6 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
                 size="sm"
                 avatarUrl={currentUser.avatarUrl}
                 name={currentUser.talkoNumber}
+                talkoNumber={currentUser.talkoNumber}
                 className="ring-2 ring-transparent hover:ring-blue-500 transition-all cursor-pointer"
               />
             </button>
@@ -81,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
           type="text"
           value={searchQuery}
           onChange={e => onSearchChange(e.target.value)}
-          placeholder="Kişilerde veya sohbetlerde ara..."
+          placeholder="Numara veya kişi ara (Örn: 850 882 9407)..."
           className="w-full bg-[#0F1115] text-white py-3 pl-10 pr-4 rounded-2xl border border-[#23262F] focus:outline-none focus:border-[#2563EB] text-sm transition-colors"
         />
       </div>
