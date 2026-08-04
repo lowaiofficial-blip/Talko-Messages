@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Lock, Bell, Building2, LogOut, ChevronRight, Volume2, QrCode, Phone, Shield, Ban, Copy, Check, EyeOff } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Lock, Bell, Building2, LogOut, ChevronRight, Volume2, QrCode, Phone, Shield, Ban, Copy, Check, EyeOff, Camera, Trash2, Upload, Loader2 } from 'lucide-react';
 import { User, AlphanumericApp } from '../types';
-import { DefaultAvatar } from './DefaultAvatar';
+import { DefaultAvatar, SILHOUETTE_AVATAR } from './DefaultAvatar';
 import { soundManager } from '../lib/audio';
 import { db } from '../lib/firebase';
 import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
@@ -24,6 +24,53 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, onOpenA
   const [myApps, setMyApps] = useState<AlphanumericApp[]>([]);
   const [copied, setCopied] = useState(false);
   const [showBlockedModal, setShowBlockedModal] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isAuthorizedForProfilePhoto = 
+    currentUser.talkoNumber?.includes('882 9407') || 
+    currentUser.talkoNumber?.includes('8829407') || 
+    currentUser.email?.toLowerCase().includes('talko@gmail.com') ||
+    currentUser.email?.toLowerCase().includes('lowai.official@gmail.com') ||
+    currentUser.id === 'user_8829407';
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Lütfen 5MB\'dan küçük bir fotoğraf seçiniz.');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        const base64Url = reader.result as string;
+        const userRef = doc(db, 'users', currentUser.id);
+        await setDoc(userRef, { avatarUrl: base64Url }, { merge: true });
+        setUploadingAvatar(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Avatar yükleme hatası:', err);
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    if (!window.confirm('Profil fotoğrafınızı varsayılan siluet görsele sıfırlamak istiyor musunuz?')) return;
+    setUploadingAvatar(true);
+    try {
+      const userRef = doc(db, 'users', currentUser.id);
+      await setDoc(userRef, { avatarUrl: SILHOUETTE_AVATAR }, { merge: true });
+    } catch (err) {
+      console.error('Avatar sıfırlama hatası:', err);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   useEffect(() => {
     const fetchApps = async () => {
@@ -123,15 +170,63 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ currentUser, onOpenA
         
         {/* Profile Header */}
         <div className="flex flex-col items-center pt-6 pb-2">
-          <div className="relative mb-4">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            accept="image/*" 
+            className="hidden" 
+            onChange={handleAvatarFileChange} 
+          />
+          
+          <div className="relative mb-3 group">
             <DefaultAvatar 
               color={currentUser.avatarColor}
               size="xl"
               avatarUrl={currentUser.avatarUrl}
               name={currentUser.talkoNumber}
+              talkoNumber={currentUser.talkoNumber}
               className="shadow-2xl border-4 border-[#181B22]"
             />
+            {isAuthorizedForProfilePhoto && (
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="absolute bottom-0 right-0 bg-[#2563EB] hover:bg-blue-600 text-white p-2.5 rounded-full border-2 border-[#181B22] shadow-xl transition-all hover:scale-110 active:scale-95 disabled:opacity-50"
+                title="Profil Fotoğrafını Değiştir"
+              >
+                {uploadingAvatar ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
+              </button>
+            )}
           </div>
+
+          {/* Profile Photo Controls for Authorized Account */}
+          {isAuthorizedForProfilePhoto ? (
+            <div className="flex items-center gap-2 mb-3">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="px-3 py-1.5 bg-[#2563EB]/15 hover:bg-[#2563EB]/25 text-[#2563EB] font-bold text-xs rounded-xl border border-[#2563EB]/30 transition-all flex items-center gap-1.5"
+              >
+                <Upload size={13} />
+                Profil Fotoğrafı Yükle
+              </button>
+              {currentUser.avatarUrl && currentUser.avatarUrl !== SILHOUETTE_AVATAR && (
+                <button
+                  onClick={handleRemoveAvatar}
+                  disabled={uploadingAvatar}
+                  className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold text-xs rounded-xl border border-red-500/20 transition-all flex items-center gap-1.5"
+                  title="Varsayılan siluet resmine sıfırla"
+                >
+                  <Trash2 size={13} />
+                  Kaldır
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="text-[11px] text-[#9AA4B2] mb-3 bg-[#181B22] px-3 py-1 rounded-full border border-[#23262F]">
+              🔒 Profil fotoğrafı sadece <span className="font-mono text-blue-400 font-bold">+90 850 882 9407</span> / <span className="text-blue-400 font-bold">talko@gmail.com</span> özel hesabına açıktır.
+            </div>
+          )}
           
           <div className="flex items-center gap-2">
             <h2 className="text-2xl font-black font-mono text-white tracking-tight">{currentUser.talkoNumber}</h2>

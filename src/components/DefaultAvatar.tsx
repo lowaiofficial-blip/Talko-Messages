@@ -105,17 +105,8 @@ export const DefaultAvatar: React.FC<DefaultAvatarProps> = ({
     );
   }
 
-  // 3. SILHOUETTE AVATAR PROFILE (Grauer Hintergrund + Weiße Silhouette)
-  if (isSilhouette) {
-    return (
-      <div className={`${sizeClasses[size]} ${roundedClass} shadow-md overflow-hidden shrink-0 ${className}`}>
-        <SilhouetteAvatarSVG />
-      </div>
-    );
-  }
-
-  // 4. CUSTOM IMAGE AVATAR PROFILE
-  if (avatarUrl && !imgError) {
+  // 3. CUSTOM IMAGE AVATAR PROFILE (If a custom avatarUrl exists and is not SILHOUETTE_AVATAR)
+  if (avatarUrl && avatarUrl !== SILHOUETTE_AVATAR && !imgError) {
     return (
       <img 
         src={avatarUrl} 
@@ -124,6 +115,15 @@ export const DefaultAvatar: React.FC<DefaultAvatarProps> = ({
         className={`${sizeClasses[size]} ${roundedClass} object-cover shadow-sm ${className}`}
         referrerPolicy="no-referrer"
       />
+    );
+  }
+
+  // 4. SILHOUETTE AVATAR PROFILE (Grauer Hintergrund + Weiße Silhouette for +90 850 882 9407 or default SILHOUETTE_AVATAR)
+  if (isSilhouette) {
+    return (
+      <div className={`${sizeClasses[size]} ${roundedClass} shadow-md overflow-hidden shrink-0 ${className}`}>
+        <SilhouetteAvatarSVG />
+      </div>
     );
   }
 
